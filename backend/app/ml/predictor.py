@@ -1,23 +1,37 @@
-"""Predictor engine for real stress inference.
+"""Predictor engine for real stress inference using Sanjeevni_Best_Stress_Model.pkl.
 
 Strictly enforces NO-MOCK-DATA:
 - If model is missing -> MODEL_UNAVAILABLE
 - If sensor buffer is incomplete -> INSUFFICIENT_DATA
-- If real model and real features exist -> real inference
+- If signal quality fails -> SENSOR_ERROR
+- If real model and real features exist -> real predict_proba() inference
+
+Presents outputs strictly as 'Estimated Stress' from autonomic physiological responses;
+NEVER as a clinical or medical diagnosis.
 """
 from typing import Dict, Any, Optional
 import numpy as np
+import pandas as pd
 from app.ml.model_loader import model_loader
-from app.ml.metadata import STRESS_CLASSES, NUM_EXPECTED_FEATURES
+from app.ml.metadata import STRESS_CLASSES, NUM_EXPECTED_FEATURES, FEATURE_NAMES_26
 from app.schemas.common import DataStatus
 from app.core.logging import logger
 
 
 class StressPredictor:
-    """Predicts stress level from 44 extracted features using the loaded ML model."""
+    """Estimates stress probability from 26 extracted physiological features."""
 
     @classmethod
-    def predict(cls, features: Optional[np.ndarray]) -> Dict[str, Any]:
+    def predict(
+        cls,
+        features: Optional[np.ndarray],
+        features_dict: Optional[Dict[str, float]] = None,
+    ) -> Dict[str, Any]:
+        """Runs real ML inference using predict_proba() on the loaded RandomForest model.
+
+        Returns a dictionary containing status, stress_level, stress_score,
+        confidence, raw_probability, and feature details.
+        """
         # 1. Verify model availability
         if not model_loader.is_available:
             return {
@@ -25,51 +39,73 @@ class StressPredictor:
                 "stress_level": None,
                 "stress_score": None,
                 "confidence": None,
-                "message": "Stress model is not loaded (requires Sanjeevni_FINAL_Stress_Model.pkl).",
+                "raw_probability": None,
+                "message": "Stress model is not loaded (requires Sanjeevni_Best_Stress_Model.pkl).",
             }
 
-        # 2. Verify feature vector presence and shape
+        # 2. Verify feature vector presence and dimension
         if features is None or len(features) != NUM_EXPECTED_FEATURES:
+            count = len(features) if features is not None else 0
             return {
                 "status": DataStatus.INSUFFICIENT_DATA,
                 "stress_level": None,
                 "stress_score": None,
                 "confidence": None,
-                "message": f"Insufficient sensor window data. Expected {NUM_EXPECTED_FEATURES} features.",
+                "raw_probability": None,
+                "message": f"Insufficient feature vector. Expected {NUM_EXPECTED_FEATURES} features, got {count}.",
+            }
+
+        if not np.all(np.isfinite(features)):
+            return {
+                "status": DataStatus.SENSOR_ERROR,
+                "stress_level": None,
+                "stress_score": None,
+                "confidence": None,
+                "raw_probability": None,
+                "message": "Feature vector contains non-finite numbers (NaN or Inf).",
             }
 
         try:
             model = model_loader.model
-            X = features.reshape(1, -1)
+            col_names = model_loader.feature_names or FEATURE_NAMES_26
 
-            # Check if classifier or regressor
-            if hasattr(model, "predict_proba"):
-                probs = model.predict_proba(X)[0]
-                pred_idx = int(np.argmax(probs))
-                confidence = float(np.max(probs))
-                stress_level = STRESS_CLASSES[pred_idx] if pred_idx < len(STRESS_CLASSES) else str(pred_idx)
-                stress_score = float(probs[-1] * 100.0) if len(probs) > 1 else float(confidence * 100.0)
+            # Construct DataFrame with exact column names to avoid sklearn feature name warnings
+            if features_dict and all(k in features_dict for k in col_names):
+                df_input = pd.DataFrame([[features_dict[k] for k in col_names]], columns=col_names)
             else:
-                pred = model.predict(X)[0]
-                if isinstance(pred, (int, np.integer)):
-                    stress_level = STRESS_CLASSES[int(pred)] if int(pred) < len(STRESS_CLASSES) else str(pred)
-                    stress_score = float(pred * 50.0)
-                    confidence = 0.85
-                elif isinstance(pred, str):
-                    stress_level = pred.upper()
-                    stress_score = 50.0
-                    confidence = 0.85
+                df_input = pd.DataFrame([features], columns=col_names)
+
+            # Execute real inference using predict_proba
+            if hasattr(model, "predict_proba"):
+                probs = model.predict_proba(df_input)[0]
+                # Class 0: Baseline / Non-stress, Class 1: Stress
+                if len(probs) >= 2:
+                    p_stress = float(probs[1])
+                    p_baseline = float(probs[0])
+                    confidence = float(max(p_stress, p_baseline))
                 else:
-                    stress_score = float(pred)
-                    stress_level = "HIGH" if stress_score > 66 else ("MODERATE" if stress_score > 33 else "LOW")
-                    confidence = 0.85
+                    p_stress = float(probs[0])
+                    confidence = 1.0
+
+                # Stress classification using 0.5 decision threshold
+                is_stress = p_stress >= 0.5
+                stress_level = "STRESS" if is_stress else "BASELINE"
+                stress_score = round(p_stress * 100.0, 2)
+            else:
+                pred = model.predict(df_input)[0]
+                is_stress = bool(pred == 1 or pred == "STRESS")
+                stress_level = "STRESS" if is_stress else "BASELINE"
+                p_stress = 1.0 if is_stress else 0.0
+                stress_score = 100.0 if is_stress else 0.0
+                confidence = 0.85
 
             return {
                 "status": DataStatus.REAL_DATA,
                 "stress_level": stress_level,
-                "stress_score": round(stress_score, 2),
+                "stress_score": stress_score,
                 "confidence": round(confidence, 3),
-                "message": "Stress prediction successfully inferred from real wearable sensor data.",
+                "raw_probability": round(p_stress, 4),
+                "message": "Estimated Stress probability successfully inferred from real physiological sensor data.",
             }
         except Exception as exc:
             logger.error(f"Inference error with ML model: {exc}")
@@ -78,5 +114,6 @@ class StressPredictor:
                 "stress_level": None,
                 "stress_score": None,
                 "confidence": None,
+                "raw_probability": None,
                 "message": f"ML model inference failed: {str(exc)}",
             }

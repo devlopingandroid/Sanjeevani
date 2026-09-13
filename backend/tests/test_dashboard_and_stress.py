@@ -63,8 +63,11 @@ def test_dashboard_device_collecting_data(client):
     assert data["data_status"] == DataStatus.INSUFFICIENT_DATA.value
 
 
-def test_stress_prediction_model_unavailable(client):
+def test_stress_prediction_model_unavailable(client, monkeypatch):
     """When ML model file is not present, returns MODEL_UNAVAILABLE, never fakes stress."""
+    from app.ml.model_loader import model_loader
+    monkeypatch.setattr(model_loader, "_is_loaded", False)
+    monkeypatch.setattr(model_loader, "_model", None)
     response = client.post(
         "/api/v1/stress/predict", json={"device_id": "ESP32_MODEL_TEST"}
     )

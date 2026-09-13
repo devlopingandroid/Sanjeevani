@@ -24,10 +24,13 @@ def bandpass_filter(
     fast_win = max(1, int(fs / highcut_hz))
     slow_win = max(fast_win + 1, int(fs / lowcut_hz))
 
+    # Remove DC baseline offset first to prevent edge convolution spikes
+    ac_data = data - np.mean(data)
+
     # Fast moving average (removes high-frequency sensor noise)
-    fast_ma = np.convolve(data, np.ones(fast_win) / fast_win, mode="same")
-    # Slow moving average (estimates baseline wander / DC offset)
-    slow_ma = np.convolve(data, np.ones(slow_win) / slow_win, mode="same")
+    fast_ma = np.convolve(ac_data, np.ones(fast_win) / fast_win, mode="same")
+    # Slow moving average (estimates low-frequency baseline drift)
+    slow_ma = np.convolve(ac_data, np.ones(slow_win) / slow_win, mode="same")
 
     # Bandpass output = fast_ma - slow_ma
     return fast_ma - slow_ma
