@@ -108,6 +108,12 @@ function RootNavigationGuard() {
           headerBackTitle: 'Back',
         }}
       />
+      <Stack.Screen
+        name="developer/model-test"
+        options={{
+          headerShown: false,
+        }}
+      />
     </Stack>
   );
 }

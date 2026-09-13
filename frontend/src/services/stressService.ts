@@ -5,7 +5,11 @@
  */
 import { apiRequest } from '../api/client';
 import { ENDPOINTS } from '../api/endpoints';
-import { StressPredictionResponse } from '../api/types';
+import {
+  StressPredictionResponse,
+  ModelTestRequestPayload,
+  ModelTestResponsePayload,
+} from '../api/types';
 
 export const stressService = {
   async getLatest(deviceId: string): Promise<StressPredictionResponse> {
@@ -16,6 +20,13 @@ export const stressService = {
     return apiRequest<StressPredictionResponse>(ENDPOINTS.STRESS.PREDICT, {
       method: 'POST',
       body: JSON.stringify({ device_id: deviceId }),
+    });
+  },
+
+  async runModelTest(payload: ModelTestRequestPayload): Promise<ModelTestResponsePayload> {
+    return apiRequest<ModelTestResponsePayload>(ENDPOINTS.STRESS.MODEL_TEST, {
+      method: 'POST',
+      body: JSON.stringify(payload),
     });
   },
 };

@@ -66,35 +66,74 @@ export const authService = {
   },
 
   async uploadAvatar(fileUri: string, mimeType?: string, fileName?: string): Promise<UserProfile> {
-    const formData = new FormData();
-    let type = mimeType || 'image/jpeg';
-    if (!mimeType) {
-      const lower = fileUri.toLowerCase();
-      if (lower.endsWith('.png')) type = 'image/png';
-      else if (lower.endsWith('.webp')) type = 'image/webp';
-      else if (lower.endsWith('.gif')) type = 'image/gif';
-      else if (lower.endsWith('.heic')) type = 'image/heic';
-      else type = 'image/jpeg';
+    const isDev = typeof __DEV__ !== 'undefined' ? __DEV__ : process.env.NODE_ENV !== 'production';
+
+    // 1. Sanitize & Normalize local file URI for React Native FormData
+    let cleanUri = (fileUri || '').trim();
+    if (Platform.OS === 'android') {
+      if (!cleanUri.startsWith('file://') && !cleanUri.startsWith('content://')) {
+        if (cleanUri.startsWith('file:/')) {
+          cleanUri = cleanUri.replace(/^file:\/*/, 'file:///');
+        } else {
+          cleanUri = `file://${cleanUri}`;
+        }
+      }
     }
-    if (type === 'image/jpg') type = 'image/jpeg';
 
-    const ext = type.includes('png') ? 'png' : type.includes('webp') ? 'webp' : type.includes('gif') ? 'gif' : 'jpg';
-    const name = fileName || `avatar_${Date.now()}.${ext}`;
+    // 2. Resolve MIME type safely from parameter or file extension
+    let derivedMime = mimeType ? mimeType.trim().toLowerCase() : '';
+    if (!derivedMime || derivedMime === 'image' || !derivedMime.includes('/')) {
+      const lower = cleanUri.toLowerCase();
+      if (lower.endsWith('.png')) derivedMime = 'image/png';
+      else if (lower.endsWith('.webp')) derivedMime = 'image/webp';
+      else if (lower.endsWith('.gif')) derivedMime = 'image/gif';
+      else if (lower.endsWith('.heic')) derivedMime = 'image/heic';
+      else if (lower.endsWith('.heif')) derivedMime = 'image/heif';
+      else derivedMime = 'image/jpeg';
+    }
+    if (derivedMime === 'image/jpg') derivedMime = 'image/jpeg';
 
-    const formattedUri = Platform.OS === 'android' && !fileUri.startsWith('file://') && !fileUri.startsWith('content://')
-      ? `file://${fileUri}`
-      : fileUri;
+    // 3. Resolve Filename safely
+    let derivedName = fileName ? fileName.trim() : '';
+    if (!derivedName) {
+      const extensionMap: Record<string, string> = {
+        'image/png': 'png',
+        'image/webp': 'webp',
+        'image/gif': 'gif',
+        'image/heic': 'heic',
+        'image/heif': 'heif',
+        'image/jpeg': 'jpg',
+      };
+      const ext = extensionMap[derivedMime] || 'jpg';
+      derivedName = `avatar_${Date.now()}.${ext}`;
+    }
 
+    // 4. Temporary safe debug logging (never log JWT/secrets)
+    if (isDev) {
+      console.log(`[Avatar] Selected URI: ${cleanUri}`);
+      console.log(`[Avatar] MIME type: ${derivedMime}`);
+      console.log(`[Avatar] Filename: ${derivedName}`);
+      console.log(`[Avatar] Uploading multipart avatar`);
+    }
+
+    // 5. React Native / Expo compatible multipart FormData object
+    const formData = new FormData();
     formData.append('file', {
-      uri: formattedUri,
-      type,
-      name,
+      uri: cleanUri,
+      name: derivedName,
+      type: derivedMime,
     } as any);
 
-    return await apiRequest<UserProfile>(ENDPOINTS.USERS.AVATAR, {
+    const result = await apiRequest<UserProfile>(ENDPOINTS.USERS.AVATAR, {
       method: 'POST',
       body: formData,
     });
+
+    if (isDev) {
+      console.log(`[Avatar] Upload successful`);
+    }
+
+    return result;
   },
 
   async forgotPassword(email: string): Promise<AuthStatusResponse> {

@@ -108,6 +108,16 @@ export default function ProfileScreen() {
     },
   ];
 
+  const devItems = [
+    {
+      title: 'Manual Model Test',
+      subtitle: 'Development tool — test 26 ML model features manually',
+      icon: 'flask-outline' as const,
+      action: () => router.push('/developer/model-test'),
+      highlight: true,
+    },
+  ];
+
   const [imageError, setImageError] = React.useState<boolean>(false);
   const userInitials = getUserInitials(user?.full_name, user?.email);
   const avatarUrl = resolveAvatarUrl(user?.profile_image_url);
@@ -273,6 +283,42 @@ export default function ProfileScreen() {
                 <Text style={styles.menuSubtitle}>{item.subtitle}</Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+            </TouchableOpacity>
+          ))}
+        </SanjeevniCard>
+
+        {/* Developer Tools Section */}
+        <SectionHeader title="Developer Tools" subtitle="Development & empirical ML model verification" />
+        <SanjeevniCard style={styles.menuCard}>
+          {devItems.map((item, idx) => (
+            <TouchableOpacity
+              key={idx}
+              activeOpacity={0.7}
+              onPress={item.action}
+              style={[
+                styles.menuItem,
+                idx < devItems.length - 1 && styles.menuItemBorder,
+                item.highlight && styles.highlightRow,
+              ]}
+            >
+              <View style={[styles.menuIconCircle, item.highlight && styles.highlightIconCircle]}>
+                <Ionicons
+                  name={item.icon}
+                  size={20}
+                  color={item.highlight ? colors.primaryDark : colors.primary}
+                />
+              </View>
+              <View style={styles.menuTextContainer}>
+                <Text style={[styles.menuTitle, item.highlight && styles.highlightTitle]}>
+                  {item.title}
+                </Text>
+                <Text style={styles.menuSubtitle}>{item.subtitle}</Text>
+              </View>
+              <Ionicons
+                name="chevron-forward"
+                size={18}
+                color={item.highlight ? colors.primary : colors.textMuted}
+              />
             </TouchableOpacity>
           ))}
         </SanjeevniCard>
