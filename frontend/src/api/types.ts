@@ -89,3 +89,46 @@ export interface VitalsHistoryRecord {
   skin_conductance_us: number | null;
   motion_magnitude: number | null;
 }
+
+// --- Auth & User Types ---
+
+export interface UserProfile {
+  id: number;
+  email: string;
+  full_name: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface AuthTokenResponse {
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+}
+
+export interface AuthStatusResponse {
+  success: boolean;
+  message: string;
+}
+
+// --- AI Chat Types ---
+
+export interface ChatMessage {
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  timestamp?: string;
+}
+
+export interface AIChatRequest {
+  message: string;
+  conversation_history?: ChatMessage[];
+  include_health_context?: boolean;
+}
+
+export interface AIChatResponse {
+  reply: string;
+  model: string;
+  timestamp: string;
+  health_context_included: boolean;
+  status: string;
+}

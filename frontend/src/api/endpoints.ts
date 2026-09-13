@@ -30,5 +30,15 @@ export const ENDPOINTS = {
   AUTH: {
     LOGIN: '/api/v1/auth/login',
     REGISTER: '/api/v1/auth/register',
+    REFRESH: '/api/v1/auth/refresh',
+    LOGOUT: '/api/v1/auth/logout',
+    FORGOT_PASSWORD: '/api/v1/auth/forgot-password',
+    RESET_PASSWORD: '/api/v1/auth/reset-password',
+  },
+  USERS: {
+    ME: '/api/v1/users/me',
+  },
+  AI: {
+    CHAT: '/api/v1/ai/chat',
   },
 } as const;

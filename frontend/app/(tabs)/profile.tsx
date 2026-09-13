@@ -2,13 +2,22 @@
  * Profile Screen
  * 
  * User profile, health preferences, connected device controls,
- * and data privacy settings.
+ * data privacy settings, and active session sign-out.
+ * 
+ * Information Architecture:
+ * - My Profile Header & Status (Bound dynamically to verified Supabase user)
+ * - Health (Health Preferences, My Wellness Record)
+ * - Device (Sanjeevni Wearable)
+ * - Privacy & Data (Privacy Controls, Data & Reports)
+ * - Settings (Notifications, System Settings)
+ * - Sign Out (Destroys local JWT and resets session)
  */
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '../../src/context/AuthContext';
 import { useHealthData } from '../../src/context/HealthDataContext';
 import { colors, spacing, typography, radii, shadows } from '../../src/theme';
 import { SanjeevniCard } from '../../src/components/common/SanjeevniCard';
@@ -16,40 +25,96 @@ import { SectionHeader } from '../../src/components/common/SectionHeader';
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { activeDeviceId, summary } = useHealthData();
+  const { user, logout } = useAuth();
+  const { activeDeviceId } = useHealthData();
 
-  const settingsItems = [
+  const handleLogout = () => {
+    Alert.alert(
+      'Sign Out',
+      'Are you sure you want to sign out of Sanjeevni?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Sign Out',
+          style: 'destructive',
+          onPress: async () => {
+            await logout();
+            router.replace('/(auth)/login');
+          },
+        },
+      ]
+    );
+  };
+
+  const healthItems = [
     {
-      title: 'Connected Wearable',
-      subtitle: activeDeviceId ? `Active: ${activeDeviceId}` : 'No device configured',
-      icon: 'watch-outline' as const,
-      action: () => router.push('/device-details'),
+      title: 'My Wellness Record',
+      subtitle: 'Biometric profile & verified telemetry history',
+      icon: 'document-text-outline' as const,
+      action: () => router.push('/records'),
+      highlight: true,
     },
     {
-      title: 'Estimated Stress Thresholds',
-      subtitle: 'Autonomic nervous system calibration',
+      title: 'Health Preferences',
+      subtitle: 'Autonomic nervous system calibration & thresholds',
       icon: 'pulse-outline' as const,
       action: () => router.push('/stress-details'),
     },
     {
-      title: 'Food & Nutrition Preferences',
-      subtitle: 'Dietary goals and hydration targets',
+      title: 'Nutrition & Hydration',
+      subtitle: 'Dietary goals and daily hydration targets',
       icon: 'nutrition-outline' as const,
       action: () => router.push('/nutrition'),
     },
+  ];
+
+  const deviceItems = [
     {
-      title: 'Data & Privacy Controls',
-      subtitle: 'Local encryption & Supabase cloud sync',
+      title: 'Sanjeevni Wearable',
+      subtitle: activeDeviceId ? `Active Device: ${activeDeviceId}` : 'Waiting for device connection',
+      icon: 'watch-outline' as const,
+      action: () => router.push('/device-details'),
+    },
+  ];
+
+  const privacyItems = [
+    {
+      title: 'Privacy & Security',
+      subtitle: 'End-to-end telemetry encryption controls',
       icon: 'shield-checkmark-outline' as const,
       action: () => {},
     },
     {
-      title: 'Support & Professional Consultation',
-      subtitle: 'Connect with wellness experts',
-      icon: 'headset-outline' as const,
-      action: () => router.push('/support'),
+      title: 'Data & Reports',
+      subtitle: 'Export raw sensor logs & cloud sync status',
+      icon: 'cloud-upload-outline' as const,
+      action: () => router.push('/records'),
     },
   ];
+
+  const settingItems = [
+    {
+      title: 'Notifications & Alerts',
+      subtitle: 'Real-time autonomic stress alerts',
+      icon: 'notifications-outline' as const,
+      action: () => {},
+    },
+    {
+      title: 'Application Settings',
+      subtitle: 'Display theme, haptics, and sensor polling rate',
+      icon: 'settings-outline' as const,
+      action: () => {},
+    },
+  ];
+
+  const userInitials = user?.full_name
+    ? user.full_name
+        .split(' ')
+        .map((n) => n[0])
+        .join('')
+        .substring(0, 2)
+        .toUpperCase()
+    : 'SJ';
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -58,16 +123,16 @@ export default function ProfileScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.screenTitle}>My Profile</Text>
-        <Text style={styles.screenSubtitle}>Personalized wellness settings & security</Text>
+        <Text style={styles.screenSubtitle}>Personalized wellness settings & records</Text>
 
-        {/* User Card */}
+        {/* Dynamic Authenticated User Card */}
         <SanjeevniCard style={styles.userCard}>
           <View style={styles.avatarCircle}>
-            <Text style={styles.avatarText}>SJ</Text>
+            <Text style={styles.avatarText}>{userInitials}</Text>
           </View>
           <View style={styles.userInfo}>
-            <Text style={styles.userName}>Sanjeevni User</Text>
-            <Text style={styles.userEmail}>Local Profile (Not signed in)</Text>
+            <Text style={styles.userName}>{user?.full_name || 'Sanjeevni User'}</Text>
+            <Text style={styles.userEmail}>{user?.email || 'Authenticated User'}</Text>
             <View style={styles.statusPill}>
               <View style={[styles.greenDot, !activeDeviceId && styles.grayDot]} />
               <Text style={styles.statusText}>
@@ -77,18 +142,53 @@ export default function ProfileScreen() {
           </View>
         </SanjeevniCard>
 
-        {/* Settings Sections */}
-        <SectionHeader title="Settings & Management" subtitle="Configure wearable and telemetry" />
-
+        {/* Health Section - Featuring My Wellness Record */}
+        <SectionHeader title="Health" subtitle="Biometrics & empirical wellness records" />
         <SanjeevniCard style={styles.menuCard}>
-          {settingsItems.map((item, idx) => (
+          {healthItems.map((item, idx) => (
             <TouchableOpacity
               key={idx}
               activeOpacity={0.7}
               onPress={item.action}
               style={[
                 styles.menuItem,
-                idx < settingsItems.length - 1 && styles.menuItemBorder,
+                idx < healthItems.length - 1 && styles.menuItemBorder,
+                item.highlight && styles.highlightRow,
+              ]}
+            >
+              <View style={[styles.menuIconCircle, item.highlight && styles.highlightIconCircle]}>
+                <Ionicons
+                  name={item.icon}
+                  size={20}
+                  color={item.highlight ? colors.primaryDark : colors.primary}
+                />
+              </View>
+              <View style={styles.menuTextContainer}>
+                <Text style={[styles.menuTitle, item.highlight && styles.highlightTitle]}>
+                  {item.title}
+                </Text>
+                <Text style={styles.menuSubtitle}>{item.subtitle}</Text>
+              </View>
+              <Ionicons
+                name="chevron-forward"
+                size={18}
+                color={item.highlight ? colors.primary : colors.textMuted}
+              />
+            </TouchableOpacity>
+          ))}
+        </SanjeevniCard>
+
+        {/* Device Section */}
+        <SectionHeader title="Device" subtitle="Paired ESP32 biosensors & hardware diagnostics" />
+        <SanjeevniCard style={styles.menuCard}>
+          {deviceItems.map((item, idx) => (
+            <TouchableOpacity
+              key={idx}
+              activeOpacity={0.7}
+              onPress={item.action}
+              style={[
+                styles.menuItem,
+                idx < deviceItems.length - 1 && styles.menuItemBorder,
               ]}
             >
               <View style={styles.menuIconCircle}>
@@ -102,6 +202,66 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           ))}
         </SanjeevniCard>
+
+        {/* Privacy & Data Section */}
+        <SectionHeader title="Privacy & Data" subtitle="Data sovereignty and telemetry logs" />
+        <SanjeevniCard style={styles.menuCard}>
+          {privacyItems.map((item, idx) => (
+            <TouchableOpacity
+              key={idx}
+              activeOpacity={0.7}
+              onPress={item.action}
+              style={[
+                styles.menuItem,
+                idx < privacyItems.length - 1 && styles.menuItemBorder,
+              ]}
+            >
+              <View style={styles.menuIconCircle}>
+                <Ionicons name={item.icon} size={20} color={colors.primary} />
+              </View>
+              <View style={styles.menuTextContainer}>
+                <Text style={styles.menuTitle}>{item.title}</Text>
+                <Text style={styles.menuSubtitle}>{item.subtitle}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+            </TouchableOpacity>
+          ))}
+        </SanjeevniCard>
+
+        {/* Settings Section */}
+        <SectionHeader title="Settings" subtitle="System and notification preferences" />
+        <SanjeevniCard style={styles.menuCard}>
+          {settingItems.map((item, idx) => (
+            <TouchableOpacity
+              key={idx}
+              activeOpacity={0.7}
+              onPress={item.action}
+              style={[
+                styles.menuItem,
+                idx < settingItems.length - 1 && styles.menuItemBorder,
+              ]}
+            >
+              <View style={styles.menuIconCircle}>
+                <Ionicons name={item.icon} size={20} color={colors.primary} />
+              </View>
+              <View style={styles.menuTextContainer}>
+                <Text style={styles.menuTitle}>{item.title}</Text>
+                <Text style={styles.menuSubtitle}>{item.subtitle}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+            </TouchableOpacity>
+          ))}
+        </SanjeevniCard>
+
+        {/* Sign Out Action Button */}
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={handleLogout}
+          style={styles.logoutBtn}
+        >
+          <Ionicons name="log-out-outline" size={20} color="#EF4444" />
+          <Text style={styles.logoutBtnText}>Sign Out of Sanjeevni</Text>
+        </TouchableOpacity>
 
         {/* Clinical Disclaimer Card */}
         <View style={styles.disclaimerCard}>
@@ -197,6 +357,7 @@ const styles = StyleSheet.create({
   menuCard: {
     padding: 0,
     overflow: 'hidden',
+    marginBottom: spacing.xs,
   },
   menuItem: {
     flexDirection: 'row',
@@ -208,6 +369,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.borderSubtle,
   },
+  highlightRow: {
+    backgroundColor: '#F0FDFA',
+  },
   menuIconCircle: {
     width: 36,
     height: 36,
@@ -217,6 +381,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: spacing.md,
   },
+  highlightIconCircle: {
+    backgroundColor: '#CCFBF1',
+  },
   menuTextContainer: {
     flex: 1,
   },
@@ -225,10 +392,30 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.bold,
     color: colors.textPrimary,
   },
+  highlightTitle: {
+    color: colors.primaryDark,
+  },
   menuSubtitle: {
     fontSize: 11,
     color: colors.textMuted,
     marginTop: 2,
+  },
+  logoutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FEE2E2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: radii.button,
+    paddingVertical: spacing.md,
+    marginTop: spacing.base,
+  },
+  logoutBtnText: {
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.bold,
+    color: '#DC2626',
+    marginLeft: spacing.xs,
   },
   disclaimerCard: {
     flexDirection: 'row',

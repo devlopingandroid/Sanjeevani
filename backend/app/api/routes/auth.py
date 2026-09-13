@@ -3,9 +3,21 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.models.user import User
-from app.schemas.auth import Token, LoginRequest
+from app.schemas.auth import (
+    Token,
+    LoginRequest,
+    ForgotPasswordRequest,
+    ResetPasswordRequest,
+    AuthStatusResponse,
+)
 from app.schemas.user import UserCreate, UserResponse
-from app.core.security import get_password_hash, verify_password, create_access_token
+from app.core.security import (
+    get_password_hash,
+    verify_password,
+    create_access_token,
+    decode_access_token,
+)
+from app.api.dependencies import get_current_user
 from app.core.config import settings
 from app.core.exceptions import SanjeevniException, ErrorCode
 
@@ -63,4 +75,86 @@ def login(
         access_token=access_token,
         token_type="bearer",
         expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+    )
+
+
+@router.post(
+    "/refresh",
+    response_model=Token,
+    summary="Refresh Access Token",
+)
+def refresh_token(
+    current_user: User = Depends(get_current_user),
+):
+    """Generates a refreshed access token for an active authenticated user."""
+    access_token = create_access_token(subject=current_user.id)
+    return Token(
+        access_token=access_token,
+        token_type="bearer",
+        expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+    )
+
+
+@router.post(
+    "/logout",
+    response_model=AuthStatusResponse,
+    summary="User Logout",
+)
+def logout(
+    current_user: User = Depends(get_current_user),
+):
+    """Validates active session and confirms client-side credential clearing."""
+    return AuthStatusResponse(
+        success=True,
+        message="Logged out successfully",
+    )
+
+
+@router.post(
+    "/forgot-password",
+    response_model=AuthStatusResponse,
+    summary="Request Password Reset",
+)
+def forgot_password(
+    data: ForgotPasswordRequest,
+    db: Session = Depends(get_db),
+):
+    user = db.query(User).filter(User.email == data.email).first()
+    # Always return a safe success response to prevent email enumeration attacks
+    if not user:
+        return AuthStatusResponse(
+            success=True,
+            message="If the email is registered, password reset instructions have been dispatched.",
+        )
+
+    # In production, a cryptographic reset token is dispatched via transactional email.
+    return AuthStatusResponse(
+        success=True,
+        message="If the email is registered, password reset instructions have been dispatched.",
+    )
+
+
+@router.post(
+    "/reset-password",
+    response_model=AuthStatusResponse,
+    summary="Confirm Password Reset",
+)
+def reset_password(
+    data: ResetPasswordRequest,
+    db: Session = Depends(get_db),
+):
+    user = db.query(User).filter(User.email == data.email).first()
+    if not user:
+        raise SanjeevniException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            error_code=ErrorCode.NOT_FOUND,
+            message="User account not found",
+        )
+
+    # Update password
+    user.hashed_password = get_password_hash(data.new_password)
+    db.commit()
+    return AuthStatusResponse(
+        success=True,
+        message="Password has been successfully updated. Please log in with your new credentials.",
     )

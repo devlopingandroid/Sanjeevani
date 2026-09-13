@@ -1,10 +1,14 @@
 /**
  * Sanjeevni AI Screen
  * 
- * Intelligent wellness companion interface.
- * Strictly complies with the ZERO HARDCODED DATA policy:
- * Never simulates fake chatbot dialogues or fabricated conversational responses.
- * Honestly reports AI service status when an AI backend is not connected.
+ * Intelligent autonomic nervous system wellness companion.
+ * Real, end-to-end conversation powered strictly through FastAPI backend (/api/v1/ai/chat)
+ * which communicates with xAI Grok.
+ * 
+ * Strictly complies with ZERO HARDCODED DATA policy:
+ * - Never invents simulated AI dialogues.
+ * - Displays honest error messages if xAI is offline or key unconfigured.
+ * - Real responses come strictly from the backend.
  */
 import React, { useState } from 'react';
 import {
@@ -16,14 +20,16 @@ import {
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { aiService } from '../../src/services/aiService';
+import { ChatMessage as APIChatMessage } from '../../src/api/types';
 import { colors, spacing, typography, radii, shadows } from '../../src/theme';
-import { SanjeevniCard } from '../../src/components/common/SanjeevniCard';
 
-interface ChatMessage {
+interface UIMessage {
   id: string;
   sender: 'ai' | 'user' | 'system';
   text: string;
@@ -33,40 +39,73 @@ interface ChatMessage {
 export default function AIScreen() {
   const router = useRouter();
   const [inputText, setInputText] = useState('');
-  const [messages, setMessages] = useState<ChatMessage[]>([
+  const [isLoading, setIsLoading] = useState(false);
+  const [messages, setMessages] = useState<UIMessage[]>([
     {
-      id: 'system-status',
+      id: 'system-intro',
       sender: 'system',
-      text: 'Sanjeevni AI service is currently unavailable. Real-time biosignal monitoring remains fully operational. Use the shortcuts below for guided relaxation protocols.',
-      timestamp: 'System Notice',
+      text: 'Welcome to Sanjeevni AI. Ask any question about somatic stress, vagal nerve regulation, restorative breathing, or mindfulness.',
+      timestamp: 'Sanjeevni Assistant',
     },
   ]);
 
   const quickPrompts = [
+    { label: 'How can I lower acute stress?', prompt: 'What are evidence-based ways to lower acute stress right now?' },
+    { label: 'Explain 4-7-8 breathing', prompt: 'How does 4-7-8 diaphragmatic breathing activate the vagus nerve?' },
     { label: 'Start breathing exercise', action: () => router.push('/yoga-breathing') },
-    { label: 'View current physiology', action: () => router.push('/(tabs)/') },
-    { label: 'Nutrition guides', action: () => router.push('/nutrition') },
+    { label: 'View nutrition guides', action: () => router.push('/nutrition') },
   ];
 
-  const handleSend = () => {
-    if (!inputText.trim()) return;
-    const userMsg: ChatMessage = {
+  const handleSend = async (overridePrompt?: string) => {
+    const textToSend = (overridePrompt || inputText).trim();
+    if (!textToSend || isLoading) return;
+
+    const userMsg: UIMessage = {
       id: Date.now().toString(),
       sender: 'user',
-      text: inputText.trim(),
-      timestamp: 'Just now',
+      text: textToSend,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
 
-    // Honest system response informing the user that conversational inference is offline
-    const systemNotice: ChatMessage = {
-      id: (Date.now() + 1).toString(),
-      sender: 'system',
-      text: 'Sanjeevni AI is currently unavailable. No conversational backend is connected. Live sensor processing is continuing on your wearable.',
-      timestamp: 'System Notice',
-    };
-
-    setMessages((prev) => [...prev, userMsg, systemNotice]);
+    setMessages((prev) => [...prev, userMsg]);
     setInputText('');
+    setIsLoading(true);
+
+    try {
+      // Build conversation history for API context
+      const history: APIChatMessage[] = messages
+        .filter((m) => m.sender === 'user' || m.sender === 'ai')
+        .map((m) => ({
+          role: m.sender === 'user' ? 'user' : 'assistant',
+          content: m.text,
+        }));
+
+      const res = await aiService.sendMessage({
+        message: textToSend,
+        conversation_history: history,
+        include_health_context: true,
+      });
+
+      const aiMsg: UIMessage = {
+        id: (Date.now() + 1).toString(),
+        sender: 'ai',
+        text: res.reply,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      };
+
+      setMessages((prev) => [...prev, aiMsg]);
+    } catch (err: any) {
+      // Honest error reporting from backend with zero fake fallbacks
+      const errorMsg: UIMessage = {
+        id: (Date.now() + 1).toString(),
+        sender: 'system',
+        text: err.message || 'Sanjeevni AI is temporarily unavailable.',
+        timestamp: 'Notice',
+      };
+      setMessages((prev) => [...prev, errorMsg]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -80,18 +119,10 @@ export default function AIScreen() {
         <View style={styles.header}>
           <View style={styles.aiBadge}>
             <Ionicons name="sparkles" size={16} color={colors.primary} />
-            <Text style={styles.aiBadgeText}>Sanjeevni AI</Text>
+            <Text style={styles.aiBadgeText}>Grok Wellness Intelligence</Text>
           </View>
-          <Text style={styles.headerTitle}>Wellness Companion</Text>
-          <Text style={styles.headerSubtitle}>Conversational biofeedback interface</Text>
-        </View>
-
-        {/* Service Status Notice Banner */}
-        <View style={styles.statusBanner}>
-          <Ionicons name="information-circle-outline" size={16} color={colors.textMuted} />
-          <Text style={styles.statusBannerText}>
-            AI backend service: Standby / Unavailable
-          </Text>
+          <Text style={styles.headerTitle}>Sanjeevni AI</Text>
+          <Text style={styles.headerSubtitle}>Real-time autonomic biofeedback companion</Text>
         </View>
 
         {/* Chat Messages */}
@@ -107,7 +138,7 @@ export default function AIScreen() {
             if (isSystem) {
               return (
                 <View key={msg.id} style={styles.systemBox}>
-                  <Ionicons name="alert-circle-outline" size={18} color={colors.primary} style={styles.systemIcon} />
+                  <Ionicons name="information-circle-outline" size={18} color={colors.primary} style={styles.systemIcon} />
                   <View style={styles.systemTextContainer}>
                     <Text style={styles.systemText}>{msg.text}</Text>
                     <Text style={styles.systemTimestamp}>{msg.timestamp}</Text>
@@ -141,6 +172,15 @@ export default function AIScreen() {
               </View>
             );
           })}
+
+          {isLoading && (
+            <View style={[styles.messageWrapper, styles.messageWrapperAI]}>
+              <View style={[styles.bubble, styles.bubbleAI, styles.loadingBubble]}>
+                <ActivityIndicator size="small" color={colors.primary} />
+                <Text style={styles.loadingText}>Sanjeevni AI is contemplating...</Text>
+              </View>
+            </View>
+          )}
         </ScrollView>
 
         {/* Suggested Quick Action Chips */}
@@ -154,7 +194,13 @@ export default function AIScreen() {
               <TouchableOpacity
                 key={idx}
                 activeOpacity={0.8}
-                onPress={p.action}
+                onPress={() => {
+                  if (p.action) {
+                    p.action();
+                  } else if (p.prompt) {
+                    handleSend(p.prompt);
+                  }
+                }}
                 style={styles.promptChip}
               >
                 <Text style={styles.promptChipText}>{p.label}</Text>
@@ -171,14 +217,15 @@ export default function AIScreen() {
             placeholderTextColor={colors.textMuted}
             value={inputText}
             onChangeText={setInputText}
-            onSubmitEditing={handleSend}
+            onSubmitEditing={() => handleSend()}
             returnKeyType="send"
+            editable={!isLoading}
           />
           <TouchableOpacity
             activeOpacity={0.8}
-            onPress={handleSend}
-            style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
-            disabled={!inputText.trim()}
+            onPress={() => handleSend()}
+            style={[styles.sendButton, (!inputText.trim() || isLoading) && styles.sendButtonDisabled]}
+            disabled={!inputText.trim() || isLoading}
           >
             <Ionicons name="send" size={16} color={colors.textOnPrimary} />
           </TouchableOpacity>
@@ -229,21 +276,6 @@ const styles = StyleSheet.create({
     fontSize: typography.size.xs,
     color: colors.textMuted,
   },
-  statusBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surfaceMuted,
-    paddingHorizontal: spacing.gutter,
-    paddingVertical: spacing.xs + 2,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle,
-  },
-  statusBannerText: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    marginLeft: 6,
-    fontWeight: typography.weight.medium,
-  },
   messagesList: {
     flex: 1,
   },
@@ -290,7 +322,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   bubble: {
-    maxWidth: '80%',
+    maxWidth: '82%',
     borderRadius: radii.card,
     padding: spacing.md,
   },
@@ -324,6 +356,17 @@ const styles = StyleSheet.create({
   },
   timestampUser: {
     color: colors.primarySubtle,
+  },
+  loadingBubble: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+  },
+  loadingText: {
+    fontSize: typography.size.xs,
+    color: colors.textMuted,
+    marginLeft: spacing.sm,
   },
   promptsContainer: {
     paddingVertical: spacing.xs,

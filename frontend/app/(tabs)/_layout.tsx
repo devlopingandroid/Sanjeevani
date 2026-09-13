@@ -1,7 +1,7 @@
 /**
  * 5-Tab Navigation Layout
  * 
- * HOME, RECORDS, WELLNESS, AI, PROFILE
+ * HOME, WELLNESS, CONSULT, AI, PROFILE
  * Matching the reference visual baseline with clean white surface,
  * subtle top border, active teal icons, and comfortable touch targets.
  */
@@ -42,20 +42,20 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="records"
-        options={{
-          title: 'Records',
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? 'document-text' : 'document-text-outline'} size={22} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
         name="wellness"
         options={{
           title: 'Wellness',
           tabBarIcon: ({ color, focused }) => (
             <Ionicons name={focused ? 'heart' : 'heart-outline'} size={22} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="consult"
+        options={{
+          title: 'Consult',
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'medkit' : 'medkit-outline'} size={22} color={color} />
           ),
         }}
       />
