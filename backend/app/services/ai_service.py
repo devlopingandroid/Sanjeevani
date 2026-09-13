@@ -19,7 +19,11 @@ from app.core.exceptions import SanjeevniException, ErrorCode
 from app.schemas.ai import ChatMessage, AIChatResponse
 from app.models.user import User
 from app.services.dashboard_service import DashboardService
-from app.services.domain_guard import DomainGuard
+from app.services.domain_guard import DomainGuard, DomainGuardStatus
+from app.services.chat_service import ChatService
+from app.services.emotion_service import EmotionAnalysisService
+from app.services.risk_engine import RiskEngineService
+
 
 
 
@@ -110,21 +114,72 @@ class AIService:
         db: Session,
         user: User,
         message: str,
-        conversation_history: List[ChatMessage],
+        conversation_history: Optional[List[ChatMessage]] = None,
         conversation_id: Optional[str] = None,
         include_health_context: bool = True,
         device_id: Optional[str] = None,
     ) -> AIChatResponse:
-        """Sends a structured request to Mistral AI with safe context and returns assistant message."""
-        # 1. Evaluate Backend Domain Guard BEFORE checking API keys or making external calls
-        is_allowed, redirect_msg = DomainGuard.evaluate(message)
-        if not is_allowed:
-            logger.info(f"DomainGuard redirected query: '{message[:50]}...'")
-            reply = redirect_msg or DomainGuard.OFF_TOPIC_REDIRECT_MESSAGE
+        """Sends a structured request to Mistral AI with DB persistence and safe health domain checking."""
+        # 1. Resolve or create conversation container in database
+        if conversation_id and conversation_id.strip():
+            conversation = ChatService.get_conversation(db, conversation_id.strip(), user.id)
+        else:
+            conversation = ChatService.create_conversation(db, user_id=user.id)
+
+        # 2. Persist User Message to database
+        user_msg_record = ChatService.add_message(
+            db=db,
+            conversation_id=conversation.id,
+            user_id=user.id,
+            role="user",
+            message_text=message,
+        )
+
+        # 2b. Run Phase 3 Emotion Analysis Service on user message
+        assessment = None
+        try:
+            assessment = await EmotionAnalysisService.analyze_message(
+                db=db,
+                user_id=user.id,
+                conversation_id=conversation.id,
+                message_id=user_msg_record.id,
+                message_text=message,
+            )
+        except Exception as exc:
+            logger.warning(f"Emotion analysis failed for message {user_msg_record.id}: {exc}")
+
+        # 2c. Run Phase 4 Deterministic Risk Engine Service
+        try:
+            RiskEngineService.evaluate_and_record(
+                db=db,
+                user=user,
+                conversation_id=conversation.id,
+                assessment=assessment,
+            )
+        except Exception as exc:
+            logger.warning(f"Risk engine evaluation failed for conversation {conversation.id}: {exc}")
+
+
+        # 3. Evaluate Backend Domain Guard (3-state classification)
+        guard_status, guard_msg = DomainGuard.evaluate(message)
+
+        if guard_status == DomainGuardStatus.BLOCKED:
+            logger.info(f"DomainGuard blocked off-topic query: '{message[:50]}...'")
+            reply = guard_msg or DomainGuard.OFF_TOPIC_REDIRECT_MESSAGE
+
+            # Persist assistant redirect message to DB
+            ChatService.add_message(
+                db=db,
+                conversation_id=conversation.id,
+                user_id=user.id,
+                role="assistant",
+                message_text=reply,
+            )
+
             return AIChatResponse(
                 reply=reply,
                 message=reply,
-                conversation_id=conversation_id or "conv_default",
+                conversation_id=conversation.id,
                 model="domain_guard",
                 timestamp=datetime.now(timezone.utc).isoformat(),
                 health_context_included=False,
@@ -135,6 +190,27 @@ class AIService:
 
         api_key = settings.MISTRAL_API_KEY
         if not api_key:
+            if guard_status == DomainGuardStatus.AMBIGUOUS:
+                reply = guard_msg or DomainGuard.AMBIGUOUS_CLARIFICATION_MESSAGE
+                ChatService.add_message(
+                    db=db,
+                    conversation_id=conversation.id,
+                    user_id=user.id,
+                    role="assistant",
+                    message_text=reply,
+                )
+                return AIChatResponse(
+                    reply=reply,
+                    message=reply,
+                    conversation_id=conversation.id,
+                    model="domain_guard",
+                    timestamp=datetime.now(timezone.utc).isoformat(),
+                    health_context_included=False,
+                    status="success",
+                    scope="HEALTH_WELLNESS",
+                    handled_by="DOMAIN_GUARD",
+                )
+
             logger.warning("Mistral API key not configured on backend.")
             raise SanjeevniException(
                 status_code=503,
@@ -142,11 +218,16 @@ class AIService:
                 message="Sanjeevni AI is temporarily unavailable. Server configuration pending.",
             )
 
-
-        # Build message payload
+        # 4. Build prompt payload for Mistral AI
         messages: List[Dict[str, str]] = [
             {"role": "system", "content": SANJEEVNI_SYSTEM_PROMPT}
         ]
+
+        if guard_status == DomainGuardStatus.AMBIGUOUS:
+            messages.append({
+                "role": "system",
+                "content": "The user's message is an open-ended personal wellbeing statement. Respond warmly and gently ask them to elaborate on whether they are experiencing stress, sleep difficulties, low mood, worry, or physical fatigue, without making any clinical diagnosis."
+            })
 
         # Add health context if enabled
         health_context_included = False
@@ -155,10 +236,13 @@ class AIService:
             messages.append({"role": "system", "content": context_str})
             health_context_included = True
 
-        # Append conversation history
-        for msg in conversation_history[-10:]:  # Keep last 10 turns max for security & token conservation
-            if msg.role in ("user", "assistant", "system"):
-                messages.append({"role": msg.role, "content": msg.content})
+        # Load recent messages from DB for context history (excluding current user message)
+        db_messages, _ = ChatService.get_messages(db, conversation_id=conversation.id, user_id=user.id, limit=10)
+        history_msgs = [m for m in db_messages if m.id != user_msg_record.id]
+
+        for m in history_msgs[-10:]:
+            if m.role in ("user", "assistant"):
+                messages.append({"role": m.role, "content": m.message})
 
         # Append current user message
         messages.append({"role": "user", "content": message})
@@ -208,14 +292,25 @@ class AIService:
             data = response.json()
             reply = data["choices"][0]["message"]["content"].strip()
 
+            # 5. Persist Assistant Response to database
+            ChatService.add_message(
+                db=db,
+                conversation_id=conversation.id,
+                user_id=user.id,
+                role="assistant",
+                message_text=reply,
+            )
+
             return AIChatResponse(
                 reply=reply,
                 message=reply,
-                conversation_id=conversation_id or "conv_default",
+                conversation_id=conversation.id,
                 model=settings.MISTRAL_MODEL,
                 timestamp=datetime.now(timezone.utc).isoformat(),
                 health_context_included=health_context_included,
                 status="success",
+                scope="HEALTH_WELLNESS",
+                handled_by="MISTRAL_AI",
             )
 
         except httpx.TimeoutException:
@@ -232,3 +327,4 @@ class AIService:
                 error_code=ErrorCode.MODEL_UNAVAILABLE,
                 message="Unable to connect to Sanjeevni AI.",
             )
+

@@ -90,3 +90,44 @@ async def upload_user_avatar(
     return current_user
 
 
+@router.delete("/me/emotional-data", summary="Delete User Emotional Wellness Data")
+def delete_user_emotional_data(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Deletes emotional assessments, risk events, and notification audit records for the authenticated user.
+
+    Preserves raw conversation logs (conversations & chat_messages) unless full account deletion is requested.
+    """
+    from app.models.emotional_assessment import EmotionalAssessment
+    from app.models.risk_event import RiskEvent
+    from app.models.notification_event import NotificationEvent
+
+    deleted_assessments = (
+        db.query(EmotionalAssessment)
+        .filter(EmotionalAssessment.user_id == current_user.id)
+        .delete(synchronize_session=False)
+    )
+    deleted_risk_events = (
+        db.query(RiskEvent)
+        .filter(RiskEvent.user_id == current_user.id)
+        .delete(synchronize_session=False)
+    )
+    deleted_notifications = (
+        db.query(NotificationEvent)
+        .filter(NotificationEvent.user_id == current_user.id)
+        .delete(synchronize_session=False)
+    )
+
+    db.commit()
+
+    return {
+        "success": True,
+        "message": "Emotional wellness data successfully deleted.",
+        "deleted_assessments_count": deleted_assessments,
+        "deleted_risk_events_count": deleted_risk_events,
+        "deleted_notification_events_count": deleted_notifications,
+    }
+
+
+

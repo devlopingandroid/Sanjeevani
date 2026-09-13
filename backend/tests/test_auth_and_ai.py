@@ -251,6 +251,11 @@ async def test_ai_chat_success_flow(client):
     token = login.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
 
+    # Create a conversation container first
+    conv_resp = client.post("/api/v1/conversations", json={"title": "Test Chat"}, headers=headers)
+    assert conv_resp.status_code == 201
+    conv_id = conv_resp.json()["id"]
+
     mock_mistral_response = {
         "id": "cmpl-mistral-12345",
         "object": "chat.completion",
@@ -276,11 +281,7 @@ async def test_ai_chat_success_flow(client):
                 "/api/v1/ai/chat",
                 json={
                     "message": "Give me a short explanation of stress.",
-                    "conversation_id": "conv_test_1",
-                    "conversation_history": [
-                        {"role": "user", "content": "Hello AI"},
-                        {"role": "assistant", "content": "Hello! How can I help with your wellness today?"}
-                    ]
+                    "conversation_id": conv_id,
                 },
                 headers=headers,
             )
@@ -289,9 +290,19 @@ async def test_ai_chat_success_flow(client):
             assert "diaphragmatic breathing" in data["reply"]
             assert data["model"] == settings.MISTRAL_MODEL
             assert data["health_context_included"] is True
-            assert data["conversation_id"] == "conv_test_1"
+            assert data["conversation_id"] == conv_id
             assert "MISTRAL_API_KEY" not in str(data)
             assert "test-mistral-key-12345" not in str(data)
+
+            # Verify both user and assistant messages were persisted in database
+            msgs_resp = client.get(f"/api/v1/conversations/{conv_id}/messages", headers=headers)
+            assert msgs_resp.status_code == 200
+            msgs_items = msgs_resp.json()["items"]
+            assert len(msgs_items) == 2
+            assert msgs_items[0]["role"] == "user"
+            assert msgs_items[0]["message"] == "Give me a short explanation of stress."
+            assert msgs_items[1]["role"] == "assistant"
+            assert "diaphragmatic breathing" in msgs_items[1]["message"]
 
 
 def test_ai_chat_invalid_payload_rejected(client):

@@ -18,4 +18,6 @@ class User(Base, TimestampMixin):
 
     devices = relationship("Device", back_populates="user", cascade="all, delete-orphan")
     conversations = relationship("Conversation", back_populates="user", cascade="all, delete-orphan")
+    trusted_contact = relationship("TrustedContact", uselist=False, back_populates="user", cascade="all, delete-orphan")
+
 

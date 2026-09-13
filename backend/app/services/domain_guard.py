@@ -1,10 +1,17 @@
 """Sanjeevni AI Domain Scope Guard.
 
 Deterministic backend security guard that restricts Sanjeevni AI strictly to
-Health & Wellness domain topics without making external LLM API calls.
+Health & Wellness domain topics while allowing natural emotional, stress,
+sleep, and wellbeing conversations without making unnecessary off-topic LLM calls.
 """
 import re
 from typing import Tuple, Optional
+
+
+class DomainGuardStatus:
+    ALLOWED = "ALLOWED"
+    AMBIGUOUS = "AMBIGUOUS"
+    BLOCKED = "BLOCKED"
 
 
 class DomainGuard:
@@ -12,6 +19,11 @@ class DomainGuard:
         "I'm Sanjeevni's health and wellness assistant. I can help with topics like "
         "stress, sleep, nutrition, exercise, wellness, and your available health data. "
         "Please ask me a health-related question."
+    )
+
+    AMBIGUOUS_CLARIFICATION_MESSAGE = (
+        "Of course. Tell me a little more about what you've been experiencing. "
+        "Have you been feeling more stressed, tired, worried, low, or having trouble sleeping lately?"
     )
 
     # Prompt Injection & Bypass keywords
@@ -44,14 +56,14 @@ class DomainGuard:
         "terminal", "command line", "npm", "pip", "repository", "regex",
         # Mathematics & General School Homework
         "algebra", "calculus", "equation", "solve for x", "trigonometry",
-        "derivative", "integral", "homework", "math problem",
+        "derivative", "integral", "homework", "math problem", "calculus equation",
         # History & Politics & Geography
         "president", "prime minister", "parliament", "democrat", "republican",
         "capital of", "geography", "world war", "history of",
         # Entertainment, Gaming & Celebrities
         "cinema", "hollywood", "bollywood", "video game", "playstation", "xbox",
         "nintendo", "fortnite", "minecraft", "pop star", "celebrity",
-        "sports news", "cricket score", "football match", "nba", "messi", "ronaldo",
+        "sports news", "cricket score", "football match", "nba", "messi", "ronaldo", "match",
         # Creative Writing & Entertainment Requests
         "tell me a joke", "tell a joke", "make me laugh", "write a poem",
         "write a story", "write a song", "write code", "write a script", "write python",
@@ -60,19 +72,24 @@ class DomainGuard:
         "lawsuit", "legal advice", "court case", "financial advice",
     ]
 
-    # Explicit Health & Wellness Allowed Keywords
+    # Explicit Health, Wellness, Stress & Emotional Keywords
     HEALTH_WELLNESS_KEYWORDS = [
         # Stress & Mental Wellness
-        "stress", "anxiety", "anxious", "depressed", "depression", "burnout",
-        "overwhelmed", "panic", "calm", "relax", "relaxation", "mindful",
-        "mindfulness", "meditation", "mental", "emotion", "emotional", "wellbeing",
-        "wellness", "vagus", "vagal", "somatic", "nervous system", "coping",
+        "stress", "stressed", "stressing", "anxiety", "anxious", "depressed", "depression",
+        "burnout", "overwhelmed", "overwhelming", "panic", "calm", "relax", "relaxation",
+        "mindful", "mindfulness", "meditation", "mental", "emotion", "emotional", "wellbeing",
+        "wellness", "vagus", "vagal", "somatic", "nervous system", "coping", "tense", "tension",
+        "pressure", "pressured",
+        # Emotional States & Mood
+        "feeling low", "feeling strange", "irritated", "irritating", "irritation", "unmotivated",
+        "motivation", "feeling down", "gloomy", "sadness", "mood", "restless", "restlessness",
+        "racing thoughts", "worrying", "worried", "worry", "worries",
         # Breathing & Somatic
         "breath", "breathing", "inhale", "exhale", "pranayama", "respiration",
         "diaphragm", "lungs", "hyperventilating",
-        # Sleep & Rest
-        "sleep", "insomnia", "tired", "fatigue", "sleepy", "bedtime", "nap",
-        "circadian", "rest", "drowsy", "snoring", "apnea",
+        # Sleep & Rest & Fatigue
+        "sleep", "sleeping", "slept", "insomnia", "tired", "fatigue", "sleepy", "bedtime",
+        "nap", "circadian", "rest", "drowsy", "snoring", "apnea", "exhausted", "exhaustion",
         # Biometrics & Sensors & Vitals
         "heart", "pulse", "bpm", "hrv", "rmssd", "temperature", "skin", "gsr",
         "eda", "sweat", "vital", "vitals", "biometric", "sensor", "telemetry",
@@ -87,50 +104,101 @@ class DomainGuard:
         "diet", "nutrition", "food", "eating", "meal", "water", "hydration",
         "exercise", "workout", "gym", "cardio", "walk", "running", "jogging",
         "yoga", "stretching", "posture", "weight", "obesity", "fitness",
-        "recovery", "habit", "protein", "calorie", "calories", "metabolism",
+        "recovery", "habit", "routine", "healthy routine", "energy", "take care",
+        "protein", "calorie", "calories", "metabolism",
         # Sanjeevni context
         "sanjeevni", "health", "health data", "stress score", "biometric data"
     ]
 
+    # Conversational Health & Emotion Regex Patterns
+    CONVERSATIONAL_HEALTH_PATTERNS = [
+        r"feel(ing)?\s+(stressed|overwhelmed|tense|low|strange|tired|anxious|restless|irritated|down|exhausted|sick|unmotivated|unlike\s+myself)",
+        r"not\s+feeling\s+like\s+myself",
+        r"mind\s+won'?t\s+stop",
+        r"thoughts?\s+keep\s+racing",
+        r"can'?t\s+(relax|sleep|concentrate|focus)",
+        r"cannot\s+(relax|sleep)",
+        r"worry(ing)?\s+about",
+        r"sleeping\s+(badly|poorly|well)",
+        r"waking\s+up\s+at\s+night",
+        r"don'?t\s+have\s+much\s+energy",
+        r"lack\s+of\s+(energy|motivation|sleep)",
+        r"take\s+better\s+care\s+of\s+myself",
+        r"healthy\s+routine",
+        r"small\s+things\s+are\s+irritating\s+me",
+        r"work\s+has\s+been\s+overwhelming",
+        r"don'?t\s+know\s+why\s+i\s+feel",
+        r"why\s+am\s+i", r"why\s+do\s+i", r"is\s+it\s+normal", r"can\s+stress",
+        r"how\s+to\s+(feel|sleep|relax|manage|improve|lower|reduce|boost|heal|treat)",
+        r"what\s+is\s+(stress|hrv|bpm|gsr|eda|vagus|vagal|wellness|anxiety|depression|sleep|hygiene|somatic)",
+        r"how\s+much\s+(water|sleep|exercise)",
+        r"should\s+i\s+(see|go\s+to|consult)\s+a\s+doctor",
+    ]
+
+    # Ambiguous Personal Wellbeing Statements (Personal open-ended state expressions)
+    AMBIGUOUS_WELLBEING_PATTERNS = [
+        r"i\s+don'?t\s+know\s+what'?s\s+(happening|wrong)\s+with\s+me",
+        r"something\s+feels?\s+off",
+        r"i\s+don'?t\s+feel\s+right",
+        r"things?\s+have\s+been\s+different\s+lately",
+        r"i\s+just\s+need\s+someone\s+to\s+talk\s+to",
+        r"i\s+don'?t\s+know\s+how\s+to\s+explain\s+it",
+    ]
+
     @classmethod
-    def evaluate(cls, message: str) -> Tuple[bool, Optional[str]]:
+    def evaluate(cls, message: str) -> Tuple[str, Optional[str]]:
         """Evaluates whether a message is within the Health & Wellness domain.
 
         Returns:
-            Tuple[bool, Optional[str]]: (is_allowed, redirect_message_if_blocked)
+            Tuple[str, Optional[str]]: (status, response_message)
+            status can be DomainGuardStatus.ALLOWED, DomainGuardStatus.AMBIGUOUS, or DomainGuardStatus.BLOCKED.
         """
         if not message or not message.strip():
-            return False, cls.OFF_TOPIC_REDIRECT_MESSAGE
+            return DomainGuardStatus.BLOCKED, cls.OFF_TOPIC_REDIRECT_MESSAGE
 
         lower_msg = message.lower().strip()
 
         # 1. Check for prompt injection attempts
         for pattern in cls.PROMPT_INJECTION_PATTERNS:
             if re.search(pattern, lower_msg):
-                return False, cls.OFF_TOPIC_REDIRECT_MESSAGE
+                return DomainGuardStatus.BLOCKED, cls.OFF_TOPIC_REDIRECT_MESSAGE
 
         # 2. Check for explicit off-topic phrases & keywords
         has_off_topic_keyword = False
         for kw in cls.OFF_TOPIC_KEYWORDS:
-            # Word boundary matching for short terms like "array", "c++", "sql"
             pattern = r"\b" + re.escape(kw) + r"\b" if len(kw) <= 5 else re.escape(kw)
             if re.search(pattern, lower_msg):
                 has_off_topic_keyword = True
                 break
 
-        # 3. Check for health & wellness keywords
+        # 3. Check for math equations like "17 x 25", "2+2=4", "solve 5*10"
+        if re.search(r"\b\d+\s*[\*\+x×/]\s*\d+\b", lower_msg) or re.search(r"\bwhat\s+is\s+\d+", lower_msg):
+            has_off_topic_keyword = True
+
+        # 4. Check for health & wellness keywords
         has_health_keyword = False
         for kw in cls.HEALTH_WELLNESS_KEYWORDS:
-            if kw in lower_msg:
+            pattern = r"\b" + re.escape(kw) + r"\b" if len(kw) <= 4 else re.escape(kw)
+            if re.search(pattern, lower_msg):
                 has_health_keyword = True
                 break
 
-        # 4. If message has explicit off-topic keywords and NO health context -> BLOCK
-        if has_off_topic_keyword and not has_health_keyword:
-            return False, cls.OFF_TOPIC_REDIRECT_MESSAGE
+        # 5. Check for conversational health & emotion patterns
+        has_conversational_pattern = any(
+            re.search(p, lower_msg) for p in cls.CONVERSATIONAL_HEALTH_PATTERNS
+        )
 
-        # 5. If message has off-topic keyword AND health keyword, check if off-topic command dominates
-        if has_off_topic_keyword and has_health_keyword:
+        # 6. Check for ambiguous personal state patterns
+        has_ambiguous_pattern = any(
+            re.search(p, lower_msg) for p in cls.AMBIGUOUS_WELLBEING_PATTERNS
+        )
+
+        # Rule A: If off-topic keyword exists and NO health keyword/pattern -> BLOCKED
+        if has_off_topic_keyword and not (has_health_keyword or has_conversational_pattern):
+            return DomainGuardStatus.BLOCKED, cls.OFF_TOPIC_REDIRECT_MESSAGE
+
+        # Rule B: If off-topic command dominates even with health words -> BLOCKED
+        if has_off_topic_keyword:
             command_patterns = [
                 r"write\s+(python|code|script|app|program)",
                 r"solve\s+(math|equation)",
@@ -138,26 +206,25 @@ class DomainGuard:
                 r"who\s+won",
                 r"how\s+to\s+code",
                 r"explain\s+(array|pointer|code|function)",
+                r"capital\s+of",
             ]
             if any(re.search(p, lower_msg) for p in command_patterns):
-                return False, cls.OFF_TOPIC_REDIRECT_MESSAGE
+                return DomainGuardStatus.BLOCKED, cls.OFF_TOPIC_REDIRECT_MESSAGE
 
-        # 6. Check for general health inquiry patterns
-        health_inquiry_patterns = [
-            r"why\s+am\s+i", r"why\s+do\s+i", r"is\s+it\s+normal", r"can\s+stress",
-            r"how\s+to\s+(feel|sleep|relax|manage|improve|lower|reduce|boost|heal|treat)",
-            r"what\s+is\s+(stress|hrv|bpm|gsr|eda|vagus|vagal|wellness|anxiety|depression|sleep|hygiene|somatic)",
-            r"how\s+much\s+(water|sleep|exercise)",
-            r"should\s+i\s+(see|go\s+to|consult)\s+a\s+doctor", r"feeling\s+(sick|tired|stressed|anxious|pain)",
-        ]
-        has_health_pattern = any(re.search(p, lower_msg) for p in health_inquiry_patterns)
+        # Rule C: Explicit health keyword or conversational health pattern -> ALLOWED
+        if has_health_keyword or has_conversational_pattern:
+            return DomainGuardStatus.ALLOWED, None
 
-        # 7. Final verdict
-        if has_health_keyword:
-            return True, None
+        # Rule D: Ambiguous personal wellbeing state statement -> AMBIGUOUS
+        if has_ambiguous_pattern:
+            return DomainGuardStatus.AMBIGUOUS, cls.AMBIGUOUS_CLARIFICATION_MESSAGE
 
-        if has_health_pattern and not has_off_topic_keyword:
-            return True, None
+        # Rule E: Short general conversational opening (e.g. "hello", "hi sanjeevni") without off-topic terms -> AMBIGUOUS
+        if not has_off_topic_keyword and len(lower_msg.split()) <= 4:
+            return DomainGuardStatus.AMBIGUOUS, cls.AMBIGUOUS_CLARIFICATION_MESSAGE
 
-        # Block any query that lacks clear health/wellness context
-        return False, cls.OFF_TOPIC_REDIRECT_MESSAGE
+        # Default fallback for completely unmatched queries without off-topic terms -> AMBIGUOUS
+        if not has_off_topic_keyword:
+            return DomainGuardStatus.AMBIGUOUS, cls.AMBIGUOUS_CLARIFICATION_MESSAGE
+
+        return DomainGuardStatus.BLOCKED, cls.OFF_TOPIC_REDIRECT_MESSAGE

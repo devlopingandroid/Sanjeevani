@@ -55,11 +55,36 @@ class Settings(BaseSettings):
     MISTRAL_BASE_URL: str = "https://api.mistral.ai"
     MISTRAL_TIMEOUT_SECONDS: float = 30.0
 
+    # Risk Engine Lookback Window Configuration
+    RISK_ENGINE_LOOKBACK_COUNT: int = 5
+    RISK_ENGINE_LOOKBACK_MINUTES: int = 60
+
+    # Trusted Contact Notification Provider Configuration
+    NOTIFICATION_PROVIDER: str = "console"  # console | twilio | twilio_sms | twilio_whatsapp | webhook
+    TWILIO_ACCOUNT_SID: Optional[str] = None
+    TWILIO_AUTH_TOKEN: Optional[str] = None
+    TWILIO_FROM_PHONE: Optional[str] = None
+    TWILIO_FROM_NUMBER: Optional[str] = None
+    NOTIFICATION_WEBHOOK_URL: Optional[str] = None
+    NOTIFICATION_WEBHOOK_SECRET: Optional[str] = None
+    NOTIFICATION_TIMEOUT_SECONDS: float = 10.0
+    NOTIFICATION_MAX_RETRIES: int = 3
+
+    @property
+    def effective_twilio_from_phone(self) -> Optional[str]:
+        return self.TWILIO_FROM_PHONE or self.TWILIO_FROM_NUMBER
+
+
     # Cloudinary Integration
     CLOUDINARY_CLOUD_NAME: Optional[str] = None
     CLOUDINARY_API_KEY: Optional[str] = None
     CLOUDINARY_API_SECRET: Optional[str] = None
     CLOUDINARY_FOLDER: str = "sanjeevni/profile-avatars"
+
+    # YouTube Data API v3 Integration
+    YOUTUBE_API_KEY: Optional[str] = None
+    YOUTUBE_API_BASE_URL: str = "https://www.googleapis.com/youtube/v3"
+    YOUTUBE_MAX_RESULTS: int = 5
 
     @property
     def is_cloudinary_configured(self) -> bool:

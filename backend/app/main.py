@@ -32,6 +32,12 @@ from app.api.routes.stress import router as stress_router
 from app.api.routes.history import router as history_router
 from app.api.routes.ai import router as ai_router
 from app.api.routes.conversations import router as conversations_router
+from app.api.routes.emotion import router as emotion_router
+from app.api.routes.risk import router as risk_router
+from app.api.routes.trusted_contact import router as trusted_contact_router
+from app.api.routes.wellness import router as wellness_router
+
+
 
 
 
@@ -103,6 +109,10 @@ def create_application() -> FastAPI:
     app.include_router(history_router, prefix=api_v1_prefix)
     app.include_router(ai_router, prefix=api_v1_prefix)
     app.include_router(conversations_router, prefix=api_v1_prefix)
+    app.include_router(emotion_router, prefix=api_v1_prefix)
+    app.include_router(risk_router, prefix=api_v1_prefix)
+    app.include_router(trusted_contact_router, prefix=api_v1_prefix)
+    app.include_router(wellness_router, prefix=api_v1_prefix)
 
 
     # --- Static File Serving (Avatars & Uploads) ---
