@@ -37,6 +37,7 @@ export const ENDPOINTS = {
   },
   USERS: {
     ME: '/api/v1/users/me',
+    AVATAR: '/api/v1/users/me/avatar',
   },
   AI: {
     CHAT: '/api/v1/ai/chat',

@@ -56,6 +56,30 @@ export const authService = {
     }
   },
 
+  async updateProfile(updates: { full_name?: string; profile_image_url?: string }): Promise<UserProfile> {
+    return await apiRequest<UserProfile>(ENDPOINTS.USERS.ME, {
+      method: 'PATCH',
+      body: JSON.stringify(updates),
+    });
+  },
+
+  async uploadAvatar(fileUri: string, mimeType?: string, fileName?: string): Promise<UserProfile> {
+    const formData = new FormData();
+    const type = mimeType || (fileUri.endsWith('.png') ? 'image/png' : 'image/jpeg');
+    const name = fileName || `avatar_${Date.now()}.${type === 'image/png' ? 'png' : 'jpg'}`;
+
+    formData.append('file', {
+      uri: fileUri,
+      type,
+      name,
+    } as any);
+
+    return await apiRequest<UserProfile>(ENDPOINTS.USERS.AVATAR, {
+      method: 'POST',
+      body: formData,
+    });
+  },
+
   async forgotPassword(email: string): Promise<AuthStatusResponse> {
     return await apiRequest<AuthStatusResponse>(ENDPOINTS.AUTH.FORGOT_PASSWORD, {
       method: 'POST',
@@ -63,3 +87,4 @@ export const authService = {
     });
   },
 };
+

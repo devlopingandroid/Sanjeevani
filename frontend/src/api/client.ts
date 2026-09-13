@@ -6,23 +6,33 @@
  * Authorization header attachment via storageService.
  * 
  * Dynamic Base URL Resolution:
+ * Evaluated dynamically per request (or on module load):
  * 1. Explicit EXPO_PUBLIC_API_BASE_URL (from frontend/.env).
- * 2. If running inside Expo Go / dev client, auto-resolves the Metro host IP (e.g. 192.168.1.3:8000).
+ * 2. If running inside Expo Go / dev client, auto-resolves the Metro host IP from Constants:
+ *    - Constants.expoConfig?.hostUri
+ *    - Constants.experienceUrl
+ *    - Constants.manifest?.debuggerHost
+ *    - Constants.manifest2?.extra?.expoGo?.debuggerHost
  * 3. Fallbacks: Android emulator -> 10.0.2.2:8000, iOS simulator / Web -> localhost:8000.
  */
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { storageService } from '../services/storageService';
 
-const getDefaultBaseUrl = (): string => {
+export const getApiBaseUrl = (): string => {
   // 1. Explicit environment configuration
   if (process.env.EXPO_PUBLIC_API_BASE_URL) {
-    return process.env.EXPO_PUBLIC_API_BASE_URL;
+    return process.env.EXPO_PUBLIC_API_BASE_URL.replace(/\/+$/, '');
   }
 
-  // 2. Auto-detect host IP from Expo Metro server (e.g., "192.168.1.3:8081" -> "192.168.1.3:8000")
-  const hostUri = Constants.expoConfig?.hostUri || (Constants as any).manifest2?.extra?.expoGo?.debuggerHost;
-  if (hostUri) {
+  // 2. Auto-detect host IP from Expo Metro server
+  const hostUri =
+    Constants.expoConfig?.hostUri ||
+    (Constants as any).manifest?.debuggerHost ||
+    (Constants as any).manifest2?.extra?.expoGo?.debuggerHost ||
+    ((Constants as any).experienceUrl ? (Constants as any).experienceUrl.replace(/^exp:\/\//, '') : null);
+
+  if (hostUri && typeof hostUri === 'string') {
     const hostIp = hostUri.split(':')[0];
     if (hostIp && hostIp !== 'localhost' && hostIp !== '127.0.0.1') {
       return `http://${hostIp}:8000`;
@@ -38,7 +48,14 @@ const getDefaultBaseUrl = (): string => {
   return 'http://localhost:8000';
 };
 
-export const API_BASE_URL = getDefaultBaseUrl();
+export const API_BASE_URL = getApiBaseUrl();
+
+// Diagnostic logging for development verification
+const isDev = typeof __DEV__ !== 'undefined' ? __DEV__ : process.env.NODE_ENV !== 'production';
+if (isDev) {
+  console.log(`[API] Platform: ${Platform.OS}`);
+  console.log(`[API] Base URL: ${API_BASE_URL}`);
+}
 
 export interface ApiErrorResponse {
   message: string;
@@ -69,16 +86,23 @@ export async function apiRequest<T>(
   options: RequestInit = {},
   timeoutMs: number = 8000
 ): Promise<T> {
-  const url = `${API_BASE_URL}${endpoint}`;
+  const baseUrl = getApiBaseUrl();
+  const url = `${baseUrl}${endpoint}`;
+
+  if (isDev) {
+    console.log(`[API] Request -> ${options.method || 'GET'} ${url}`);
+  }
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   // Retrieve JWT if present
   const token = await storageService.getToken();
 
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
   const headers: Record<string, string> = {
     Accept: 'application/json',
-    'Content-Type': 'application/json',
+    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...(options.headers as Record<string, string>),
   };
