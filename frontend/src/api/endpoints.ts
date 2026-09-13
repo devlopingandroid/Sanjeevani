@@ -16,6 +16,7 @@ export const ENDPOINTS = {
   STRESS: {
     LATEST: (deviceId: string) => `/api/v1/stress/latest/${encodeURIComponent(deviceId)}`,
     PREDICT: '/api/v1/stress/predict',
+    MODEL_TEST: '/api/v1/stress/model-test',
   },
   DEVICES: {
     LIST: '/api/v1/devices/',

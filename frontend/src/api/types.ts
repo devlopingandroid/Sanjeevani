@@ -123,13 +123,60 @@ export interface ChatMessage {
 export interface AIChatRequest {
   message: string;
   conversation_history?: ChatMessage[];
+  conversation_id?: string;
   include_health_context?: boolean;
 }
 
 export interface AIChatResponse {
   reply: string;
+  message?: string;
+  conversation_id?: string;
   model: string;
   timestamp: string;
   health_context_included: boolean;
   status: string;
 }
+
+// --- Manual Model Testing Types ---
+
+export interface ModelTestRequestPayload {
+  eda_mean: number;
+  eda_std: number;
+  eda_min: number;
+  eda_max: number;
+  eda_range: number;
+  eda_slope: number;
+  scr_count: number;
+  scr_mean: number;
+  bvp_mean: number;
+  bvp_std: number;
+  bvp_min: number;
+  bvp_max: number;
+  bvp_range: number;
+  bvp_hr: number;
+  hr_mean: number;
+  hr_std: number;
+  hr_min: number;
+  hr_max: number;
+  acc_mean: number;
+  acc_std: number;
+  acc_min: number;
+  acc_max: number;
+  acc_range: number;
+  acc_rms: number;
+  temp_mean: number;
+  temp_std: number;
+}
+
+export interface ModelTestResponsePayload {
+  status: string; // "MODEL_TEST_SUCCESS"
+  prediction: number; // 0 or 1
+  stress_level: 'BASELINE' | 'STRESS' | string;
+  stress_probability: number; // 0.0 - 1.0
+  confidence: number;
+  model_name: string;
+  feature_count: number;
+  threshold: number;
+  message: string;
+}
+

@@ -10,7 +10,7 @@
  * - Displays honest error messages if xAI is offline or key unconfigured.
  * - Real responses come strictly from the backend.
  */
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -28,6 +28,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { aiService } from '../../src/services/aiService';
 import { ChatMessage as APIChatMessage } from '../../src/api/types';
 import { colors, spacing, typography, radii, shadows } from '../../src/theme';
+import { FormattedText } from '../../src/components/common/FormattedText';
 
 interface UIMessage {
   id: string;
@@ -38,23 +39,29 @@ interface UIMessage {
 
 export default function AIScreen() {
   const router = useRouter();
+  const scrollViewRef = useRef<ScrollView>(null);
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [messages, setMessages] = useState<UIMessage[]>([
     {
       id: 'system-intro',
       sender: 'system',
-      text: 'Welcome to Sanjeevni AI. Ask any question about somatic stress, vagal nerve regulation, restorative breathing, or mindfulness.',
+      text: 'Ask Sanjeevni about your health and wellness.',
       timestamp: 'Sanjeevni Assistant',
     },
   ]);
 
+  useEffect(() => {
+    scrollViewRef.current?.scrollToEnd({ animated: true });
+  }, [messages, isLoading]);
+
   const quickPrompts = [
-    { label: 'How can I lower acute stress?', prompt: 'What are evidence-based ways to lower acute stress right now?' },
-    { label: 'Explain 4-7-8 breathing', prompt: 'How does 4-7-8 diaphragmatic breathing activate the vagus nerve?' },
-    { label: 'Start breathing exercise', action: () => router.push('/yoga-breathing') },
-    { label: 'View nutrition guides', action: () => router.push('/nutrition') },
+    { label: 'How can I manage stress?', prompt: 'How can I manage and lower my stress?' },
+    { label: 'Help me sleep better', prompt: 'How can I improve my sleep quality?' },
+    { label: 'Explain my wellness data', prompt: 'What can you tell me about my current biometric stress data?' },
+    { label: 'Give me a breathing exercise', action: () => router.push('/yoga-breathing') },
   ];
+
 
   const handleSend = async (overridePrompt?: string) => {
     const textToSend = (overridePrompt || inputText).trim();
@@ -86,10 +93,12 @@ export default function AIScreen() {
         include_health_context: true,
       });
 
+      const replyText = res.reply || res.message || 'Response received.';
+
       const aiMsg: UIMessage = {
         id: (Date.now() + 1).toString(),
         sender: 'ai',
-        text: res.reply,
+        text: replyText,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
 
@@ -119,7 +128,7 @@ export default function AIScreen() {
         <View style={styles.header}>
           <View style={styles.aiBadge}>
             <Ionicons name="sparkles" size={16} color={colors.primary} />
-            <Text style={styles.aiBadgeText}>Grok Wellness Intelligence</Text>
+            <Text style={styles.aiBadgeText}>Mistral Wellness Intelligence</Text>
           </View>
           <Text style={styles.headerTitle}>Sanjeevni AI</Text>
           <Text style={styles.headerSubtitle}>Real-time autonomic biofeedback companion</Text>
@@ -127,6 +136,7 @@ export default function AIScreen() {
 
         {/* Chat Messages */}
         <ScrollView
+          ref={scrollViewRef}
           style={styles.messagesList}
           contentContainerStyle={styles.messagesContent}
           showsVerticalScrollIndicator={false}
@@ -162,9 +172,16 @@ export default function AIScreen() {
                     shadows.card,
                   ]}
                 >
-                  <Text style={[styles.bubbleText, isUser ? styles.bubbleTextUser : styles.bubbleTextAI]}>
-                    {msg.text}
-                  </Text>
+                  {isUser ? (
+                    <Text style={[styles.bubbleText, styles.bubbleTextUser]}>
+                      {msg.text}
+                    </Text>
+                  ) : (
+                    <FormattedText
+                      content={msg.text}
+                      textColor={colors.textPrimary}
+                    />
+                  )}
                   <Text style={[styles.timestampText, isUser ? styles.timestampUser : styles.timestampAI]}>
                     {msg.timestamp}
                   </Text>
