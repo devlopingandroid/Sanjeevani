@@ -16,5 +16,6 @@ module.exports = {
     '^react-native$': '<rootDir>/__mocks__/react-native.js',
     '^expo-secure-store$': '<rootDir>/__mocks__/expo-secure-store.js',
     '^expo-constants$': '<rootDir>/__mocks__/expo-constants.js',
+    '^expo-image-picker$': '<rootDir>/__mocks__/expo-image-picker.js',
   },
 };

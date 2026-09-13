@@ -13,7 +13,7 @@
  * - Sign Out (Destroys local JWT and resets session)
  */
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,6 +22,7 @@ import { useHealthData } from '../../src/context/HealthDataContext';
 import { colors, spacing, typography, radii, shadows } from '../../src/theme';
 import { SanjeevniCard } from '../../src/components/common/SanjeevniCard';
 import { SectionHeader } from '../../src/components/common/SectionHeader';
+import { resolveAvatarUrl, getUserInitials } from '../../src/utils/avatar';
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -107,14 +108,8 @@ export default function ProfileScreen() {
     },
   ];
 
-  const userInitials = user?.full_name
-    ? user.full_name
-        .split(' ')
-        .map((n) => n[0])
-        .join('')
-        .substring(0, 2)
-        .toUpperCase()
-    : 'SJ';
+  const userInitials = getUserInitials(user?.full_name, user?.email);
+  const avatarUrl = resolveAvatarUrl(user?.profile_image_url);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -127,19 +122,42 @@ export default function ProfileScreen() {
 
         {/* Dynamic Authenticated User Card */}
         <SanjeevniCard style={styles.userCard}>
-          <View style={styles.avatarCircle}>
-            <Text style={styles.avatarText}>{userInitials}</Text>
-          </View>
-          <View style={styles.userInfo}>
-            <Text style={styles.userName}>{user?.full_name || 'Sanjeevni User'}</Text>
-            <Text style={styles.userEmail}>{user?.email || 'Authenticated User'}</Text>
-            <View style={styles.statusPill}>
-              <View style={[styles.greenDot, !activeDeviceId && styles.grayDot]} />
-              <Text style={styles.statusText}>
-                {activeDeviceId ? 'Wearable Paired' : 'No Wearable'}
-              </Text>
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => router.push('/edit-profile')}
+            style={styles.avatarWrapper}
+          >
+            {avatarUrl ? (
+              <Image source={{ uri: avatarUrl }} style={styles.avatarImage} resizeMode="cover" />
+            ) : (
+              <View style={styles.avatarCircle}>
+                <Text style={styles.avatarText}>{userInitials}</Text>
+              </View>
+            )}
+            <View style={styles.cameraBadge}>
+              <Ionicons name="camera" size={13} color={colors.textOnPrimary} />
             </View>
+          </TouchableOpacity>
+
+          <Text style={styles.userName}>{user?.full_name || user?.email || 'Authenticated User'}</Text>
+          <Text style={styles.userEmail}>{user?.email}</Text>
+
+          <View style={styles.statusPill}>
+            <View style={[styles.greenDot, !activeDeviceId && styles.grayDot]} />
+            <Text style={styles.statusText}>
+              {activeDeviceId ? 'Wearable Paired' : 'No Wearable'}
+            </Text>
           </View>
+
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => router.push('/edit-profile')}
+            style={styles.editProfileBtn}
+          >
+            <Ionicons name="create-outline" size={16} color={colors.primaryDark} />
+            <Text style={styles.editProfileBtnText}>Edit My Profile</Text>
+            <Ionicons name="chevron-forward" size={14} color={colors.primaryDark} />
+          </TouchableOpacity>
         </SanjeevniCard>
 
         {/* Health Section - Featuring My Wellness Record */}
@@ -298,46 +316,92 @@ const styles = StyleSheet.create({
     marginBottom: spacing.base,
   },
   userCard: {
-    flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.lg,
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.base,
+  },
+  avatarWrapper: {
+    position: 'relative',
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    marginBottom: spacing.md,
+    borderWidth: 2.5,
+    borderColor: colors.primaryTint,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.card,
+  },
+  avatarImage: {
+    width: 82,
+    height: 82,
+    borderRadius: 41,
   },
   avatarCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 82,
+    height: 82,
+    borderRadius: 41,
     backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: spacing.md,
   },
   avatarText: {
     color: colors.textOnPrimary,
-    fontSize: typography.size.xl,
+    fontSize: typography.size.xxl,
     fontWeight: typography.weight.bold,
   },
-  userInfo: {
-    flex: 1,
+  cameraBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: colors.primaryDark,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: colors.surface,
   },
   userName: {
-    fontSize: typography.size.lg,
+    fontSize: typography.size.xl,
     fontWeight: typography.weight.bold,
     color: colors.textPrimary,
+    textAlign: 'center',
   },
   userEmail: {
     fontSize: typography.size.xs,
     color: colors.textMuted,
-    marginTop: 2,
+    marginTop: 3,
+    textAlign: 'center',
   },
   statusPill: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.primaryTint,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 3,
     borderRadius: radii.pill,
-    alignSelf: 'flex-start',
-    marginTop: 6,
+    marginTop: 8,
+  },
+  editProfileBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primaryTint,
+    borderWidth: 1,
+    borderColor: '#CCFBF1',
+    borderRadius: radii.pill,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    marginTop: spacing.md,
+  },
+  editProfileBtnText: {
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.bold,
+    color: colors.primaryDark,
+    marginHorizontal: spacing.xs,
   },
   greenDot: {
     width: 6,

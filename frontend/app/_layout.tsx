@@ -59,6 +59,12 @@ function RootNavigationGuard() {
       <Stack.Screen name="(auth)" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen
+        name="edit-profile"
+        options={{
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
         name="records"
         options={{
           title: 'My Wellness Record',
