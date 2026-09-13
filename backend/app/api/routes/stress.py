@@ -26,9 +26,9 @@ def get_latest_stress(
     response_model=StressPredictionResponse,
     summary="Trigger Stress Inference",
     description=(
-        "Extracts 44 features from the rolling 30s sensor buffer and evaluates stress "
-        "using the real ML model. Returns MODEL_UNAVAILABLE if model file is missing, "
-        "or INSUFFICIENT_DATA if buffer has less than 30s of samples."
+        "Extracts 26 features from the rolling 30s sensor buffer and evaluates Estimated Stress "
+        "using predict_proba() on the real ML model. Returns MODEL_UNAVAILABLE if model file is missing, "
+        "SENSOR_ERROR if optical/GSR signals fail quality checks, or INSUFFICIENT_DATA if buffer has less than 30s of samples."
     ),
 )
 def trigger_stress_prediction(

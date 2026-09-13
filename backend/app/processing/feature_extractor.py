@@ -1,154 +1,221 @@
-"""Feature extraction pipeline extracting 44 physiological features from 30s buffer.
+"""Deterministic feature extraction pipeline for SANJEEVNI Stress ML Model.
 
-Pure numpy implementation ensuring robust, deterministic, sub-millisecond execution.
-Follows the NO-MOCK-DATA policy: requires sufficient real sensor samples (25 Hz x 30s = 750 samples).
+Extracts exactly 26 physiological features from the 30-second sensor window
+in the exact mathematical representation and order expected by Sanjeevni_Best_Stress_Model.pkl:
+
+1. eda_mean      - Mean skin conductance (μS)
+2. eda_std       - Standard deviation of skin conductance (μS)
+3. eda_min       - Minimum skin conductance (μS)
+4. eda_max       - Maximum skin conductance (μS)
+5. eda_range     - Peak-to-peak amplitude range (eda_max - eda_min)
+6. eda_slope     - Linear trend slope d(EDA)/dt (μS/s)
+7. scr_count     - Count of phasic Skin Conductance Responses (peaks)
+8. scr_mean      - Mean amplitude of detected phasic SCR peaks (μS)
+9. bvp_mean      - Mean of zero-centered bandpass-filtered BVP
+10. bvp_std      - Standard deviation of BVP amplitude
+11. bvp_min      - Minimum BVP amplitude
+12. bvp_max      - Maximum BVP amplitude
+13. bvp_range    - BVP amplitude range (bvp_max - bvp_min)
+14. bvp_hr       - Heart rate derived from BVP systolic peaks (BPM)
+15. hr_mean      - Mean heart rate across the 30-second window (BPM)
+16. hr_std       - Standard deviation of heart rate (BPM)
+17. hr_min       - Minimum instantaneous heart rate (BPM)
+18. hr_max       - Maximum instantaneous heart rate (BPM)
+19. acc_mean     - Mean 3D acceleration magnitude (scaled 1g = 64.0)
+20. acc_std      - Standard deviation of 3D acceleration magnitude
+21. acc_min      - Minimum 3D acceleration magnitude
+22. acc_max      - Maximum 3D acceleration magnitude
+23. acc_range    - Acceleration magnitude range (acc_max - acc_min)
+24. acc_rms      - Root Mean Square of 3D acceleration magnitude
+25. temp_mean    - Mean peripheral skin temperature (°Celsius)
+26. temp_std     - Standard deviation of skin temperature (°Celsius)
+
+Pure numpy implementation ensuring deterministic execution, zero OpenBLAS/C-extension
+deadlocks on Windows, and sub-millisecond execution.
 """
+import math
 import numpy as np
-from typing import List, Dict, Any, Optional
-from app.ml.metadata import FEATURE_NAMES, NUM_EXPECTED_FEATURES
+from typing import List, Dict, Any, Optional, Tuple
+from app.ml.metadata import FEATURE_NAMES_26, NUM_EXPECTED_FEATURES
 from app.processing.signal_processing import bandpass_filter, find_peaks
 
 
-def calc_skewness(arr: np.ndarray) -> float:
-    std = np.std(arr)
-    if std == 0:
-        return 0.0
-    return float(np.mean(((arr - np.mean(arr)) / std) ** 3))
-
-
-def calc_kurtosis(arr: np.ndarray) -> float:
-    std = np.std(arr)
-    if std == 0:
-        return 0.0
-    return float(np.mean(((arr - np.mean(arr)) / std) ** 4) - 3.0)
-
-
-def calc_linear_slope(arr: np.ndarray) -> float:
+def calc_linear_slope_per_sec(arr: np.ndarray, fs: float = 25.0) -> float:
+    """Calculates linear slope d(signal)/dt in units per second."""
     n = len(arr)
     if n < 2:
         return 0.0
-    x = np.arange(n)
-    denom = n * np.sum(x**2) - (np.sum(x)) ** 2
+    t = np.arange(n) / fs  # time in seconds
+    denom = np.var(t) * n
     if denom == 0:
         return 0.0
-    numer = n * np.sum(x * arr) - np.sum(x) * np.sum(arr)
-    return float(numer / denom)
+    cov = np.sum((t - np.mean(t)) * (arr - np.mean(arr)))
+    return float(cov / denom)
 
 
-def extract_44_features(samples: List[Dict[str, Any]], fs: float = 25.0) -> Optional[np.ndarray]:
-    """Extracts exactly 44 physiological features from real buffer samples.
+def extract_scr_peaks(eda: np.ndarray, fs: float = 25.0) -> Tuple[float, float]:
+    """Detects phasic Skin Conductance Responses (SCR).
 
-    Returns a 1D numpy array of length 44, or None if samples are insufficient.
+    Extracts phasic component via moving baseline subtraction,
+    then detects peaks with amplitude >= 0.02 μS and minimum spacing >= 1.0s.
+
+    Returns:
+        Tuple[scr_count: float, scr_mean: float]
     """
-    if not samples or len(samples) < 200:  # Require adequate samples for 30s window evaluation
-        return None
+    n = len(eda)
+    if n < int(fs * 4.0):  # Require at least 4 seconds
+        return 0.0, 0.0
+
+    # Moving average filter for tonic baseline (window length = 4 seconds)
+    win_len = max(3, int(fs * 4.0))
+    tonic = np.convolve(eda, np.ones(win_len) / win_len, mode="same")
+    phasic = eda - tonic
+
+    # Find peaks with minimum distance of 1.0s (fs samples) and prominence >= 0.02 μS
+    min_dist = max(1, int(fs * 1.0))
+    peaks = find_peaks(phasic, min_distance=min_dist, prominence=0.02)
+
+    scr_count = float(len(peaks))
+    if len(peaks) > 0:
+        scr_mean = float(np.mean(phasic[peaks]))
+    else:
+        scr_mean = 0.0
+
+    return scr_count, scr_mean
+
+
+def extract_26_features(
+    samples: List[Dict[str, Any]], fs: float = 25.0
+) -> Tuple[Optional[np.ndarray], Optional[Dict[str, float]]]:
+    """Extracts the authoritative 26 physiological features from a 30s window.
+
+    Returns:
+        Tuple[features_array (1D numpy array length 26), features_dict]
+        or (None, None) if samples are insufficient or contain invalid numbers.
+    """
+    if not samples or len(samples) < 100:
+        return None, None
 
     try:
-        ir = np.array([s.get("ir") or s.get("IR", 0) for s in samples], dtype=float)
-        red = np.array([s.get("red") or s.get("RED", 0) for s in samples], dtype=float)
-        ax = np.array([s.get("accel_x") or s.get("Accel_X", 0) for s in samples], dtype=float)
-        ay = np.array([s.get("accel_y") or s.get("Accel_Y", 0) for s in samples], dtype=float)
-        az = np.array([s.get("accel_z") or s.get("Accel_Z", 0) for s in samples], dtype=float)
-        gx = np.array([s.get("gyro_x") or s.get("Gyro_X", 0) for s in samples], dtype=float)
-        gy = np.array([s.get("gyro_y") or s.get("Gyro_Y", 0) for s in samples], dtype=float)
-        gz = np.array([s.get("gyro_z") or s.get("Gyro_Z", 0) for s in samples], dtype=float)
-        temp = np.array([s.get("temp_f") or s.get("Temp_F", 0.0) for s in samples], dtype=float)
-        gsr_raw = np.array([s.get("gsr_raw") or s.get("GSR_Raw", 0) for s in samples], dtype=float)
-        gsr_volt = np.array([s.get("gsr_voltage") or s.get("GSR_Voltage", 0.0) for s in samples], dtype=float)
+        # Extract raw arrays
+        ir = np.array([float(s.get("ir") or s.get("IR", 0)) for s in samples])
+        red = np.array([float(s.get("red") or s.get("RED", 0)) for s in samples])
+        ax = np.array([float(s.get("accel_x") or s.get("Accel_X", 0)) for s in samples])
+        ay = np.array([float(s.get("accel_y") or s.get("Accel_Y", 0)) for s in samples])
+        az = np.array([float(s.get("accel_z") or s.get("Accel_Z", 0)) for s in samples])
+        temp_f = np.array([float(s.get("temperature") or s.get("temp_f") or s.get("Temp_F", 0.0)) for s in samples])
+        gsr_v = np.array([float(s.get("gsr_voltage") or s.get("GSR_Voltage", 0.0)) for s in samples])
+
+        # Validate non-finite numbers
+        for arr in [ir, red, ax, ay, az, temp_f, gsr_v]:
+            if np.any(np.isnan(arr)) or np.any(np.isinf(arr)):
+                return None, None
 
         feats: Dict[str, float] = {}
 
-        # 1-9: PPG Optical & Morphological
-        feats["ppg_ir_mean"] = float(np.mean(ir))
-        feats["ppg_ir_std"] = float(np.std(ir))
-        feats["ppg_ir_skew"] = calc_skewness(ir)
-        feats["ppg_ir_kurtosis"] = calc_kurtosis(ir)
+        # ==========================================================
+        # 1-8: Electrodermal Activity (EDA / GSR)
+        # ==========================================================
+        # Calibrate GSR voltage to skin conductance in microSiemens (μS)
+        # Scale: ~1.5V corresponds to ~2.25 μS; clipped to physiological human bounds (0.01 - 50.0 μS)
+        eda = np.clip(gsr_v * 1.5, 0.01, 50.0)
 
-        feats["ppg_red_mean"] = float(np.mean(red))
-        feats["ppg_red_std"] = float(np.std(red))
-        feats["ppg_red_skew"] = calc_skewness(red)
-        feats["ppg_red_kurtosis"] = calc_kurtosis(red)
+        feats["eda_mean"] = float(np.mean(eda))
+        feats["eda_std"] = float(np.std(eda))
+        feats["eda_min"] = float(np.min(eda))
+        feats["eda_max"] = float(np.max(eda))
+        feats["eda_range"] = float(np.ptp(eda))
+        feats["eda_slope"] = calc_linear_slope_per_sec(eda, fs=fs)
 
-        dc_ir = np.mean(ir)
-        ac_ir = np.ptp(ir)
-        feats["ppg_ac_dc_ratio"] = float(ac_ir / dc_ir) if dc_ir > 0 else 0.0
+        scr_count, scr_mean = extract_scr_peaks(eda, fs=fs)
+        feats["scr_count"] = scr_count
+        feats["scr_mean"] = scr_mean
 
-        # 10-18: Heart Rate & HRV
-        filtered_ir = bandpass_filter(ir, lowcut_hz=0.7, highcut_hz=3.5, fs=fs)
-        min_distance = int(0.4 * fs)
-        peaks = find_peaks(filtered_ir, min_distance=min_distance)
+        # ==========================================================
+        # 9-14: Blood Volume Pulse (BVP) from Photoplethysmography
+        # ==========================================================
+        # Bandpass filter IR signal between 0.5 Hz and 4.0 Hz (cardiac band)
+        bvp = bandpass_filter(ir, lowcut_hz=0.5, highcut_hz=4.0, fs=fs)
 
-        if len(peaks) >= 3:
-            ibis = np.diff(peaks) / fs * 1000.0  # ms
-            valid_ibis = ibis[(ibis >= 300) & (ibis <= 1500)]
-            if len(valid_ibis) >= 2:
-                hr_seq = 60000.0 / valid_ibis
-                feats["hr_mean"] = float(np.mean(hr_seq))
-                feats["hr_std"] = float(np.std(hr_seq))
-                feats["ibi_mean"] = float(np.mean(valid_ibis))
-                feats["ibi_std"] = float(np.std(valid_ibis))
+        feats["bvp_mean"] = float(np.mean(bvp))
+        feats["bvp_std"] = float(np.std(bvp))
+        feats["bvp_min"] = float(np.min(bvp))
+        feats["bvp_max"] = float(np.max(bvp))
+        feats["bvp_range"] = float(np.ptp(bvp))
 
-                diff_ibis = np.abs(np.diff(valid_ibis))
-                feats["hrv_rmssd"] = float(np.sqrt(np.mean(diff_ibis**2)))
-                feats["hrv_sdnn"] = float(np.std(valid_ibis))
-                feats["hrv_pnn50"] = float(np.sum(diff_ibis > 50) / len(diff_ibis) * 100.0)
-                feats["hrv_pnn20"] = float(np.sum(diff_ibis > 20) / len(diff_ibis) * 100.0)
-                feats["hrv_lf_hf_ratio"] = 1.0
-            else:
-                for k in ["hr_mean", "hr_std", "ibi_mean", "ibi_std", "hrv_rmssd", "hrv_sdnn", "hrv_pnn50", "hrv_pnn20", "hrv_lf_hf_ratio"]:
-                    feats[k] = 0.0
-        else:
-            for k in ["hr_mean", "hr_std", "ibi_mean", "ibi_std", "hrv_rmssd", "hrv_sdnn", "hrv_pnn50", "hrv_pnn20", "hrv_lf_hf_ratio"]:
-                feats[k] = 0.0
+        # Peak detection on optical BVP systolic pulses
+        # Refractory period: minimum 0.35s distance (up to 171 BPM)
+        min_dist = max(1, int(0.35 * fs))
+        peaks = find_peaks(bvp, min_distance=min_dist)
 
-        # 19-27: GSR / EDA
-        feats["gsr_raw_mean"] = float(np.mean(gsr_raw))
-        feats["gsr_raw_std"] = float(np.std(gsr_raw))
-        feats["gsr_voltage_mean"] = float(np.mean(gsr_volt))
-        feats["gsr_voltage_std"] = float(np.std(gsr_volt))
-        feats["gsr_voltage_min"] = float(np.min(gsr_volt))
-        feats["gsr_voltage_max"] = float(np.max(gsr_volt))
+        duration_sec = max(1.0, len(samples) / fs)
+        if len(peaks) < 2:
+            # Cannot determine pulse rate without systolic peaks; reject instead of faking data
+            return None, None
+        feats["bvp_hr"] = float((len(peaks) / duration_sec) * 60.0)
 
-        # Tonic baseline (slow moving average) and phasic response
-        slow_win = max(1, int(fs / 0.2))
-        tonic = np.convolve(gsr_volt, np.ones(slow_win) / slow_win, mode="same")
-        phasic = gsr_volt - tonic
-        feats["gsr_tonic_mean"] = float(np.mean(tonic))
-        feats["gsr_phasic_mean"] = float(np.mean(np.abs(phasic)))
+        # ==========================================================
+        # 15-18: Heart Rate (HR)
+        # ==========================================================
+        ibis_sec = np.diff(peaks) / fs
+        # Physiological filtering: 0.3s (200 BPM) to 1.5s (40 BPM)
+        valid_ibis = ibis_sec[(ibis_sec >= 0.30) & (ibis_sec <= 1.50)]
+        if len(valid_ibis) < 2:
+            # Cannot establish valid physiological heart rate; reject instead of faking data
+            return None, None
 
-        scr_peaks = find_peaks(phasic, min_distance=int(1.0 * fs), prominence=0.01)
-        feats["gsr_scr_peaks_count"] = float(len(scr_peaks))
+        hr_series = 60.0 / valid_ibis
+        feats["hr_mean"] = float(np.mean(hr_series))
+        feats["hr_std"] = float(np.std(hr_series))
+        feats["hr_min"] = float(np.min(hr_series))
+        feats["hr_max"] = float(np.max(hr_series))
 
-        # 28-32: Skin Temperature Dynamics
-        feats["temp_mean"] = float(np.mean(temp))
-        feats["temp_std"] = float(np.std(temp))
-        feats["temp_min"] = float(np.min(temp))
-        feats["temp_max"] = float(np.max(temp))
-        feats["temp_slope"] = calc_linear_slope(temp)
+        # ==========================================================
+        # 19-24: Accelerometer (ACC)
+        # ==========================================================
+        # MPU6050: default sensitivity +-2g (1g = 16384 LSB).
+        # Model was trained with Empatica E4 1/64g scaling (1g = 64.0 units).
+        # Conversion: raw / 16384 * 64.0 = raw / 256.0
+        acc_x_scaled = ax / 256.0
+        acc_y_scaled = ay / 256.0
+        acc_z_scaled = az / 256.0
+        acc_mag = np.sqrt(acc_x_scaled**2 + acc_y_scaled**2 + acc_z_scaled**2)
 
-        # 33-38: Tri-axial Accelerometer
-        acc_mag = np.sqrt(ax**2 + ay**2 + az**2)
-        feats["acc_magnitude_mean"] = float(np.mean(acc_mag))
-        feats["acc_magnitude_std"] = float(np.std(acc_mag))
-        feats["acc_magnitude_max"] = float(np.max(acc_mag))
-        feats["acc_x_std"] = float(np.std(ax))
-        feats["acc_y_std"] = float(np.std(ay))
-        feats["acc_z_std"] = float(np.std(az))
+        feats["acc_mean"] = float(np.mean(acc_mag))
+        feats["acc_std"] = float(np.std(acc_mag))
+        feats["acc_min"] = float(np.min(acc_mag))
+        feats["acc_max"] = float(np.max(acc_mag))
+        feats["acc_range"] = float(np.ptp(acc_mag))
+        feats["acc_rms"] = float(np.sqrt(np.mean(acc_mag**2)))
 
-        # 39-44: Tri-axial Gyroscope & Motion Entropy
-        gyro_mag = np.sqrt(gx**2 + gy**2 + gz**2)
-        feats["gyro_magnitude_mean"] = float(np.mean(gyro_mag))
-        feats["gyro_magnitude_std"] = float(np.std(gyro_mag))
-        feats["gyro_x_std"] = float(np.std(gx))
-        feats["gyro_y_std"] = float(np.std(gy))
-        feats["gyro_z_std"] = float(np.std(gz))
+        # ==========================================================
+        # 25-26: Skin Temperature (TEMP)
+        # ==========================================================
+        # Convert MAX30205 Fahrenheit to Celsius: (°F - 32) * 5 / 9
+        temp_c = (temp_f - 32.0) * (5.0 / 9.0)
 
-        hist, _ = np.histogram(acc_mag, bins=10, density=True)
-        hist = hist[hist > 0]
-        feats["motion_entropy"] = float(-np.sum(hist * np.log2(hist))) if len(hist) > 0 else 0.0
+        feats["temp_mean"] = float(np.mean(temp_c))
+        feats["temp_std"] = float(np.std(temp_c))
 
-        # Return vector matching FEATURE_NAMES
-        feature_vector = np.array([feats[name] for name in FEATURE_NAMES], dtype=float)
-        return feature_vector
+        # ==========================================================
+        # Assemble exact 26-feature vector in strict order
+        # ==========================================================
+        feature_vector = np.array([feats[name] for name in FEATURE_NAMES_26], dtype=np.float64)
+
+        # Final verification: exactly 26 items and all finite
+        if len(feature_vector) != NUM_EXPECTED_FEATURES:
+            return None, None
+        if not np.all(np.isfinite(feature_vector)):
+            return None, None
+
+        return feature_vector, feats
+
     except Exception:
-        return None
+        return None, None
+
+
+# Backward compatibility alias
+def extract_44_features(samples: List[Dict[str, Any]], fs: float = 25.0) -> Optional[np.ndarray]:
+    """Compatibility wrapper redirecting legacy callers to extract_26_features."""
+    arr, _ = extract_26_features(samples, fs)
+    return arr
