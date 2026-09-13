@@ -31,6 +31,8 @@ from app.api.routes.dashboard import router as dashboard_router
 from app.api.routes.stress import router as stress_router
 from app.api.routes.history import router as history_router
 from app.api.routes.ai import router as ai_router
+from app.api.routes.conversations import router as conversations_router
+
 
 
 @asynccontextmanager
@@ -100,6 +102,8 @@ def create_application() -> FastAPI:
     app.include_router(stress_router, prefix=api_v1_prefix)
     app.include_router(history_router, prefix=api_v1_prefix)
     app.include_router(ai_router, prefix=api_v1_prefix)
+    app.include_router(conversations_router, prefix=api_v1_prefix)
+
 
     # --- Static File Serving (Avatars & Uploads) ---
     app.mount("/uploads", StaticFiles(directory=settings.uploads_dir), name="uploads")

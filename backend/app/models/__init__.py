@@ -5,6 +5,7 @@ from app.models.device import Device, DeviceStatus
 from app.models.sensor import SensorData, SensorBatch
 from app.models.processed_metrics import ProcessedMetrics
 from app.models.stress_prediction import StressPrediction
+from app.models.conversation import Conversation, ChatMessage
 
 __all__ = [
     "TimestampMixin",
@@ -15,4 +16,7 @@ __all__ = [
     "SensorBatch",
     "ProcessedMetrics",
     "StressPrediction",
+    "Conversation",
+    "ChatMessage",
 ]
+

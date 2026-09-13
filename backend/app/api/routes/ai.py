@@ -1,6 +1,6 @@
 """AI Chat routing endpoints for SANJEEVNI.
 
-Proxies requests to the xAI Grok service while validating authentication tokens
+Proxies requests to the Mistral AI service while validating authentication tokens
 and isolating health telemetry strictly to the requesting user.
 """
 from fastapi import APIRouter, Depends, status
@@ -19,8 +19,8 @@ router = APIRouter(prefix="/ai", tags=["AI & Wellness Companion"])
     "/chat",
     response_model=AIChatResponse,
     status_code=status.HTTP_200_OK,
-    summary="Chat with Sanjeevni AI (Grok)",
-    description="Securely evaluates wellness questions using xAI Grok, attaching verified physiological telemetry if available.",
+    summary="Chat with Sanjeevni AI (Mistral)",
+    description="Securely evaluates wellness questions using Mistral AI, attaching verified physiological telemetry if available.",
 )
 async def chat_with_ai(
     request: AIChatRequest,
@@ -32,5 +32,6 @@ async def chat_with_ai(
         user=current_user,
         message=request.message,
         conversation_history=request.conversation_history,
+        conversation_id=request.conversation_id,
         include_health_context=request.include_health_context,
     )

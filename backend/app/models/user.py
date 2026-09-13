@@ -13,6 +13,9 @@ class User(Base, TimestampMixin):
     hashed_password = Column(String(255), nullable=False)
     full_name = Column(String(255), nullable=True)
     profile_image_url = Column(Text, nullable=True)
+    profile_image_public_id = Column(String(255), nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
 
     devices = relationship("Device", back_populates="user", cascade="all, delete-orphan")
+    conversations = relationship("Conversation", back_populates="user", cascade="all, delete-orphan")
+
