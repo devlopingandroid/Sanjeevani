@@ -1,22 +1,31 @@
-"""Authentication and security utilities for SANJEEVNI."""
+"""Authentication and security utilities for SANJEEVNI.
+
+Provides secure password hashing using bcrypt directly (preventing passlib wrap bug with bcrypt 4+)
+and standard JWT generation/decoding.
+"""
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional, Union
+import bcrypt
 import jwt
-from passlib.context import CryptContext
 from app.core.config import settings
-
-# Password hashing context (bcrypt with fallback)
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verifies a plain password against a hash."""
-    return pwd_context.verify(plain_password, hashed_password)
+    """Verifies a plain password against a bcrypt hash."""
+    try:
+        pw_bytes = plain_password.encode("utf-8")[:72]
+        hash_bytes = hashed_password.encode("utf-8")
+        return bcrypt.checkpw(pw_bytes, hash_bytes)
+    except Exception:
+        return False
 
 
 def get_password_hash(password: str) -> str:
-    """Computes a secure hash for a plain password."""
-    return pwd_context.hash(password)
+    """Computes a secure bcrypt hash for a plain password."""
+    pw_bytes = password.encode("utf-8")[:72]
+    salt = bcrypt.gensalt(rounds=12)
+    hashed = bcrypt.hashpw(pw_bytes, salt)
+    return hashed.decode("utf-8")
 
 
 def create_access_token(

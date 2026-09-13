@@ -49,6 +49,25 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
 
+    # xAI (Grok) Integration
+    XAI_API_KEY: Optional[str] = None
+    XAI_MODEL: str = "grok-4.6"
+    XAI_BASE_URL: str = "https://api.x.ai/v1"
+    XAI_TIMEOUT_SECONDS: float = 30.0
+
+    # Uploads & Media
+    @property
+    def uploads_dir(self) -> str:
+        d = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "uploads"))
+        os.makedirs(os.path.join(d, "avatars"), exist_ok=True)
+        return d
+
+    @property
+    def avatars_dir(self) -> str:
+        d = os.path.join(self.uploads_dir, "avatars")
+        os.makedirs(d, exist_ok=True)
+        return d
+
     # CORS
     CORS_ORIGINS: Union[List[str], str] = [
         "http://localhost:3000",

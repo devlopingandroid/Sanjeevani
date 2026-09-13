@@ -3,10 +3,12 @@
 FastAPI application factory with modular routing, centralized error handling,
 OpenAPI schema documentation, CORS, and lifespan management.
 """
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.core.config import settings
 from app.core.logging import logger
@@ -28,6 +30,7 @@ from app.api.routes.sensors import router as sensors_router
 from app.api.routes.dashboard import router as dashboard_router
 from app.api.routes.stress import router as stress_router
 from app.api.routes.history import router as history_router
+from app.api.routes.ai import router as ai_router
 
 
 @asynccontextmanager
@@ -96,6 +99,10 @@ def create_application() -> FastAPI:
     app.include_router(dashboard_router, prefix=api_v1_prefix)
     app.include_router(stress_router, prefix=api_v1_prefix)
     app.include_router(history_router, prefix=api_v1_prefix)
+    app.include_router(ai_router, prefix=api_v1_prefix)
+
+    # --- Static File Serving (Avatars & Uploads) ---
+    app.mount("/uploads", StaticFiles(directory=settings.uploads_dir), name="uploads")
 
     # --- Real-Time WebSocket Telemetry Endpoint ---
     @app.websocket("/ws/{device_id}")
