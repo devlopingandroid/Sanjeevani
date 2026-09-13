@@ -1,0 +1,79 @@
+"""Centralized configuration for SANJEEVNI Backend.
+
+Reads settings from environment variables or .env file with strong validation.
+"""
+from typing import List, Union, Optional
+from pydantic import AnyHttpUrl, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+import os
+
+
+class Settings(BaseSettings):
+    """Application settings with environment variable bindings."""
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=True,
+        extra="ignore"
+    )
+
+    # Project metadata
+    PROJECT_NAME: str = "SANJEEVNI API"
+    VERSION: str = "1.0.0"
+    ENVIRONMENT: str = "development"  # development | staging | production
+    API_V1_STR: str = "/api/v1"
+
+    # Database
+    # Default to local SQLite for local dev/testing if PostgreSQL URL is not provided.
+    # Production Supabase format: postgresql+psycopg2://postgres:[PASSWORD]@db.[PROJECT_REF].supabase.co:5432/postgres
+    DATABASE_URL: str = "sqlite:///./sanjeevani_dev.db"
+
+    # Supabase Specific Configuration
+    SUPABASE_URL: Optional[str] = None
+    SUPABASE_KEY: Optional[str] = None
+    SUPABASE_SERVICE_ROLE_KEY: Optional[str] = None
+
+    # USB Serial (Development Transport)
+    ESP32_SERIAL_PORT: Optional[str] = None  # e.g., "COM3" on Windows or "/dev/ttyUSB0" on Linux
+    ESP32_SERIAL_BAUDRATE: int = 115200
+    ESP32_SERIAL_DEVICE_ID: str = "ESP32_WEARABLE_DEV"
+    ESP32_SERIAL_AUTO_RECONNECT: bool = True
+    ESP32_SERIAL_RECONNECT_DELAY_SECONDS: float = 2.0
+
+    # ML Model
+    MODEL_PATH: str = os.path.join("models", "Sanjeevni_Best_Stress_Model.pkl")
+
+    # Security & JWT
+    JWT_SECRET: str = "sanjeevni-dev-insecure-secret-key-change-in-production-32b"
+    JWT_ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
+
+    # CORS
+    CORS_ORIGINS: Union[List[str], str] = [
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173",
+    ]
+
+    @field_validator("CORS_ORIGINS", mode="before")
+    @classmethod
+    def assemble_cors_origins(cls, v: Union[str, List[str]]) -> List[str]:
+        if isinstance(v, str) and not v.startswith("["):
+            return [i.strip() for i in v.split(",") if i.strip()]
+        elif isinstance(v, (list, str)):
+            return v
+        raise ValueError(v)
+
+    # Logging
+    LOG_LEVEL: str = "INFO"
+
+    # Wearable Device Parameters
+    DEVICE_HEARTBEAT_TIMEOUT_SECONDS: int = 30  # Considered STALE after 30s
+    DEVICE_DISCONNECT_TIMEOUT_SECONDS: int = 90  # Considered DISCONNECTED after 90s
+    BUFFER_WINDOW_SECONDS: int = 30
+    EXPECTED_SAMPLING_RATE_HZ: int = 25  # 25 Hz as configured in ESP32 (interval = 40ms)
+
+
+settings = Settings()
