@@ -23,6 +23,7 @@ import { colors, spacing, typography, radii, shadows } from '../../src/theme';
 import { SanjeevniCard } from '../../src/components/common/SanjeevniCard';
 import { SectionHeader } from '../../src/components/common/SectionHeader';
 import { resolveAvatarUrl, getUserInitials } from '../../src/utils/avatar';
+import { wellnessService } from '../../src/services/wellnessService';
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -78,7 +79,42 @@ export default function ProfileScreen() {
     },
   ];
 
+  const handleDeleteEmotionalData = () => {
+    Alert.alert(
+      'Delete Emotional Data',
+      'Are you sure you want to delete your emotional assessments, distress risk logs, and alert history? Raw chat transcripts will remain intact.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const res = await wellnessService.deleteEmotionalData();
+              Alert.alert('Deleted', res.message || 'Emotional wellness data deleted successfully.');
+            } catch (err: any) {
+              Alert.alert('Error', err.message || 'Failed to delete emotional wellness data.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const privacyItems = [
+    {
+      title: 'Trusted Contact & Consent',
+      subtitle: 'Emergency distress notification configuration',
+      icon: 'people-outline' as const,
+      action: () => router.push('/trusted-contact' as any),
+      highlight: true,
+    },
+    {
+      title: 'Delete Emotional Wellness Data',
+      subtitle: 'Purge emotional assessments & distress risk logs',
+      icon: 'trash-bin-outline' as const,
+      action: handleDeleteEmotionalData,
+    },
     {
       title: 'Privacy & Security',
       subtitle: 'End-to-end telemetry encryption controls',
