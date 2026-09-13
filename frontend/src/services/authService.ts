@@ -12,6 +12,8 @@ import {
   AuthStatusResponse,
 } from '../api/types';
 
+import { Platform } from 'react-native';
+
 export const authService = {
   async register(fullName: string, email: string, password: string): Promise<UserProfile> {
     return await apiRequest<UserProfile>(ENDPOINTS.AUTH.REGISTER, {
@@ -65,11 +67,26 @@ export const authService = {
 
   async uploadAvatar(fileUri: string, mimeType?: string, fileName?: string): Promise<UserProfile> {
     const formData = new FormData();
-    const type = mimeType || (fileUri.endsWith('.png') ? 'image/png' : 'image/jpeg');
-    const name = fileName || `avatar_${Date.now()}.${type === 'image/png' ? 'png' : 'jpg'}`;
+    let type = mimeType || 'image/jpeg';
+    if (!mimeType) {
+      const lower = fileUri.toLowerCase();
+      if (lower.endsWith('.png')) type = 'image/png';
+      else if (lower.endsWith('.webp')) type = 'image/webp';
+      else if (lower.endsWith('.gif')) type = 'image/gif';
+      else if (lower.endsWith('.heic')) type = 'image/heic';
+      else type = 'image/jpeg';
+    }
+    if (type === 'image/jpg') type = 'image/jpeg';
+
+    const ext = type.includes('png') ? 'png' : type.includes('webp') ? 'webp' : type.includes('gif') ? 'gif' : 'jpg';
+    const name = fileName || `avatar_${Date.now()}.${ext}`;
+
+    const formattedUri = Platform.OS === 'android' && !fileUri.startsWith('file://') && !fileUri.startsWith('content://')
+      ? `file://${fileUri}`
+      : fileUri;
 
     formData.append('file', {
-      uri: fileUri,
+      uri: formattedUri,
       type,
       name,
     } as any);

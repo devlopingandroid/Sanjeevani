@@ -11,7 +11,17 @@ from app.core.config import settings
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
-ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+ALLOWED_IMAGE_TYPES = {
+    "image/jpeg",
+    "image/jpg",
+    "image/png",
+    "image/webp",
+    "image/gif",
+    "image/heic",
+    "image/heif",
+    "application/octet-stream",
+}
+VALID_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".heic", ".heif"}
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
 
 
@@ -41,7 +51,17 @@ async def upload_user_avatar(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if file.content_type not in ALLOWED_IMAGE_TYPES:
+    content_type = (file.content_type or "").lower()
+    orig_ext = os.path.splitext(file.filename or "")[1].lower()
+
+    # If generic binary stream, strictly enforce valid image file extension
+    if content_type == "application/octet-stream":
+        if orig_ext not in VALID_EXTENSIONS:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid file extension '{orig_ext}' for image upload.",
+            )
+    elif content_type not in ALLOWED_IMAGE_TYPES and orig_ext not in VALID_EXTENSIONS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid image type '{file.content_type}'. Allowed types: jpeg, png, webp, gif.",
@@ -52,19 +72,19 @@ async def upload_user_avatar(
     if len(content) > MAX_FILE_SIZE:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"File size exceeds maximum limit of 5MB.",
+            detail="File size exceeds maximum limit of 5MB.",
         )
 
-    # Extract extension safely
-    orig_ext = os.path.splitext(file.filename or "")[1].lower()
-    if orig_ext not in [".jpg", ".jpeg", ".png", ".webp", ".gif"]:
+    if orig_ext not in VALID_EXTENSIONS:
         ext_map = {
             "image/jpeg": ".jpg",
+            "image/jpg": ".jpg",
             "image/png": ".png",
             "image/webp": ".webp",
             "image/gif": ".gif",
+            "image/heic": ".heic",
         }
-        orig_ext = ext_map.get(file.content_type, ".jpg")
+        orig_ext = ext_map.get(content_type, ".jpg")
 
     safe_filename = f"avatar_{current_user.id}_{int(time.time())}_{uuid.uuid4().hex[:8]}{orig_ext}"
     file_path = os.path.join(settings.avatars_dir, safe_filename)
@@ -77,4 +97,5 @@ async def upload_user_avatar(
     db.commit()
     db.refresh(current_user)
     return current_user
+
 

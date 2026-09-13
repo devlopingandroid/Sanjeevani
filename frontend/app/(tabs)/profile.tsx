@@ -108,6 +108,7 @@ export default function ProfileScreen() {
     },
   ];
 
+  const [imageError, setImageError] = React.useState<boolean>(false);
   const userInitials = getUserInitials(user?.full_name, user?.email);
   const avatarUrl = resolveAvatarUrl(user?.profile_image_url);
 
@@ -127,8 +128,13 @@ export default function ProfileScreen() {
             onPress={() => router.push('/edit-profile')}
             style={styles.avatarWrapper}
           >
-            {avatarUrl ? (
-              <Image source={{ uri: avatarUrl }} style={styles.avatarImage} resizeMode="cover" />
+            {!imageError && avatarUrl ? (
+              <Image
+                source={{ uri: avatarUrl }}
+                style={styles.avatarImage}
+                resizeMode="cover"
+                onError={() => setImageError(true)}
+              />
             ) : (
               <View style={styles.avatarCircle}>
                 <Text style={styles.avatarText}>{userInitials}</Text>
