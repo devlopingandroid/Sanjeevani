@@ -12,12 +12,14 @@ class UserCreate(BaseModel):
 
 class UserUpdate(BaseModel):
     full_name: Optional[str] = None
+    profile_image_url: Optional[str] = None
 
 
 class UserResponse(BaseModel):
     id: int
     email: EmailStr
     full_name: Optional[str] = None
+    profile_image_url: Optional[str] = None
     is_active: bool
     created_at: datetime
 
