@@ -172,7 +172,7 @@ async function uploadMultipartWithXHR<T>(
 export async function apiRequest<T>(
   endpoint: string,
   options: RequestInit = {},
-  timeoutMs: number = 8000
+  timeoutMs: number = 15000
 ): Promise<T> {
   const baseUrl = getApiBaseUrl();
   const url = `${baseUrl}${endpoint}`;
@@ -253,12 +253,25 @@ export async function apiRequest<T>(
     return (await response.json()) as T;
   } catch (err: any) {
     clearTimeout(timer);
-    if (err.name === 'AbortError') {
-      throw new ApiClientError(`Request timeout after ${timeoutMs / 1000}s to ${endpoint}`, 408);
+
+    const errStr = (err?.message || err?.name || String(err)).toLowerCase();
+    const isAbort =
+      err.name === 'AbortError' ||
+      errStr.includes('cancel') ||
+      errStr.includes('abort') ||
+      errStr.includes('timeout');
+
+    if (isAbort) {
+      throw new ApiClientError(
+        `Connection timed out after ${Math.round(timeoutMs / 1000)}s. Please check your network or try again.`,
+        408
+      );
     }
+
     if (err instanceof ApiClientError) {
       throw err;
     }
+
     throw new ApiClientError(
       err.message || 'Unable to connect to Sanjeevni backend. Please check network connection.',
       0

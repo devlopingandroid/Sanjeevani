@@ -39,8 +39,24 @@ export const ENDPOINTS = {
   USERS: {
     ME: '/api/v1/users/me',
     AVATAR: '/api/v1/users/me/avatar',
+    EMOTIONAL_DATA: '/api/v1/users/me/emotional-data',
   },
   AI: {
     CHAT: '/api/v1/ai/chat',
   },
+  CONVERSATIONS: {
+    LIST: '/api/v1/conversations',
+    CREATE: '/api/v1/conversations',
+    GET: (id: string) => `/api/v1/conversations/${encodeURIComponent(id)}`,
+    DELETE: (id: string) => `/api/v1/conversations/${encodeURIComponent(id)}`,
+    MESSAGES: (id: string) => `/api/v1/conversations/${encodeURIComponent(id)}/messages`,
+  },
+  TRUSTED_CONTACT: {
+    BASE: '/api/v1/trusted-contact',
+  },
+  WELLNESS: {
+    CONTEXT: '/api/v1/wellness-context',
+    EXERCISE_VIDEOS: (exerciseName: string) => `/api/v1/wellness/exercises/${encodeURIComponent(exerciseName)}/videos`,
+  },
 } as const;
+

@@ -135,7 +135,42 @@ export interface AIChatResponse {
   timestamp: string;
   health_context_included: boolean;
   status: string;
+  scope?: string;
+  handled_by?: string;
 }
+
+export interface ConversationRecord {
+  id: string;
+  user_id: number;
+  title: string | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ChatMessageRecord {
+  id: string;
+  conversation_id: string;
+  user_id: number;
+  role: 'user' | 'assistant';
+  message: string;
+  created_at: string;
+}
+
+export interface PaginatedConversations {
+  items: ConversationRecord[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface PaginatedMessages {
+  items: ChatMessageRecord[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 
 // --- Manual Model Testing Types ---
 
@@ -179,4 +214,85 @@ export interface ModelTestResponsePayload {
   threshold: number;
   message: string;
 }
+
+// --- Trusted Contact Types ---
+
+export enum NotificationLevel {
+  HIGH_AND_CRITICAL = 'high_and_critical',
+  CRITICAL_ONLY = 'critical_only',
+}
+
+export interface TrustedContactRecord {
+  id: string;
+  user_id: number;
+  name: string;
+  phone_number: string;
+  relationship: string | null;
+  enabled: boolean;
+  consent_given: boolean;
+  notification_level: NotificationLevel;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TrustedContactCreatePayload {
+  name: string;
+  phone_number: string;
+  relationship?: string | null;
+  enabled?: boolean;
+  consent_given: boolean;
+  notification_level?: NotificationLevel;
+}
+
+export interface TrustedContactUpdatePayload {
+  name?: string;
+  phone_number?: string;
+  relationship?: string | null;
+  enabled?: boolean;
+  consent_given?: boolean;
+  notification_level?: NotificationLevel;
+}
+
+// --- Multimodal Wellness & Data Retention Types ---
+
+export interface MultimodalWellnessResponse {
+  user_id: number;
+  conversation_id?: string | null;
+  device_id?: string | null;
+  physiological_stress_level?: 'BASELINE' | 'LOW' | 'MODERATE' | 'HIGH' | string | null;
+  physiological_stress_score?: number | null;
+  conversational_risk_level?: 'NORMAL' | 'ELEVATED' | 'HIGH' | 'CRITICAL' | string | null;
+  crisis_indicator: boolean;
+  wellness_concern_level: 'normal_wellness' | 'elevated_concern' | 'high_concern' | 'critical_concern' | string;
+  rule_applied: string;
+  explanation: string;
+  evaluated_at: string;
+}
+
+export interface EmotionalDataDeletionResponse {
+  success: boolean;
+  message: string;
+  deleted_assessments_count: number;
+  deleted_risk_events_count: number;
+  deleted_notification_events_count: number;
+}
+
+// --- YouTube Exercise Video Types ---
+
+export interface YouTubeVideoItem {
+  video_id: string;
+  title: string;
+  description?: string;
+  thumbnail_url: string;
+  channel_title: string;
+  published_at?: string | null;
+  youtube_url: string;
+}
+
+export interface ExerciseVideosResponse {
+  exercise: string;
+  videos: YouTubeVideoItem[];
+}
+
+
 
