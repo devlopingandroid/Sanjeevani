@@ -1,9 +1,11 @@
 """Sensor data ingestion endpoints for real ESP32 wearable packets."""
+from typing import Union
 from fastapi import APIRouter, Depends, status, HTTPException
 from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.schemas.sensor import (
     CanonicalSensorPacket,
+    SensorBatchPayload,
     SensorBatchPacket,
     RawCSVLinePayload,
     SensorIngestResponse,
@@ -21,12 +23,12 @@ router = APIRouter(prefix="/sensors", tags=["Sensors"])
     "/ingest",
     response_model=SensorIngestResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="Ingest Canonical Sensor Packet",
+    summary="Ingest Sensor Telemetry (Batched or Single Packet)",
     description=(
         "Authoritative ingestion endpoint for real-time ESP32 physiological telemetry. "
-        "Accepts canonical format from USB Serial bridge, HTTP clients, or Wi-Fi firmware. "
-        "Validates physiological limits, grades signal quality (GOOD/FAIR/POOR/INVALID), "
-        "detects duplicates/out-of-order packets, and persists raw samples to Supabase PostgreSQL."
+        "Accepts batched payloads (multiple sensor readings per POST) or single canonical packets. "
+        "Validates physiological limits, updates live memory cache instantly, and enqueues "
+        "samples for asynchronous DB persistence."
     ),
     responses={
         422: {"description": "Validation failure: packet fields malformed or unphysiological"},
@@ -34,11 +36,10 @@ router = APIRouter(prefix="/sensors", tags=["Sensors"])
     },
 )
 def ingest_canonical_sensor_packet(
-    packet: CanonicalSensorPacket,
-    db: Session = Depends(get_db),
+    payload: Union[SensorBatchPayload, CanonicalSensorPacket],
 ):
     try:
-        response = SensorService.ingest_canonical_packet(db, packet)
+        response = SensorService.ingest_payload(payload, db=None)
         return response
     except ValueError as exc:
         raise InvalidSensorPacketException(str(exc), details={"field_error": str(exc)})
@@ -92,3 +93,41 @@ def ingest_csv_line(
     # Set transport to SERIAL or HTTP as specified
     packet.transport = SensorTransport.HTTP
     return SensorService.ingest_canonical_packet(db, packet)
+
+
+@router.get(
+    "/latest/{device_id}",
+    summary="Get Latest Live Sensor Sample for Device",
+    description="Returns the most recent validated real sensor reading directly from process memory.",
+)
+def get_latest_sensor_sample_by_device(device_id: str):
+    from app.services.live_cache import live_sensor_cache
+    return live_sensor_cache.get_latest(device_id)
+
+
+@router.get(
+    "/latest",
+    summary="Get Latest Live Sensor Sample",
+    description="Returns the most recent validated real sensor reading across any connected device.",
+)
+def get_latest_sensor_sample_any():
+    from app.services.live_cache import live_sensor_cache
+    return live_sensor_cache.get_latest(None)
+
+
+@router.get(
+    "/live/{device_id}",
+    summary="Get Recent Live Samples Stream for Device",
+    description="Returns the last N in-memory sensor samples for high-frequency graphing without DB dependency.",
+)
+def get_live_sensor_history(
+    device_id: str,
+    limit: int = 100,
+):
+    from app.services.live_cache import live_sensor_cache
+    return {
+        "device_id": device_id,
+        "sample_count": len(live_sensor_cache.get_recent(device_id, limit=limit)),
+        "samples": live_sensor_cache.get_recent(device_id, limit=limit),
+    }
+

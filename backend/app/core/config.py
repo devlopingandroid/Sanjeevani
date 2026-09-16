@@ -75,24 +75,10 @@ class Settings(BaseSettings):
         return self.TWILIO_FROM_PHONE or self.TWILIO_FROM_NUMBER
 
 
-    # Cloudinary Integration
-    CLOUDINARY_CLOUD_NAME: Optional[str] = None
-    CLOUDINARY_API_KEY: Optional[str] = None
-    CLOUDINARY_API_SECRET: Optional[str] = None
-    CLOUDINARY_FOLDER: str = "sanjeevni/profile-avatars"
-
     # YouTube Data API v3 Integration
     YOUTUBE_API_KEY: Optional[str] = None
     YOUTUBE_API_BASE_URL: str = "https://www.googleapis.com/youtube/v3"
     YOUTUBE_MAX_RESULTS: int = 5
-
-    @property
-    def is_cloudinary_configured(self) -> bool:
-        return bool(
-            self.CLOUDINARY_CLOUD_NAME
-            and self.CLOUDINARY_API_KEY
-            and self.CLOUDINARY_API_SECRET
-        )
 
 
     # Uploads & Media

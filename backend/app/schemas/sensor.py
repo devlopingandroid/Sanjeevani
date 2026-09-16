@@ -113,7 +113,7 @@ class CanonicalSensorPacket(BaseModel):
 
     Transport-agnostic: both USB Serial and HTTP/Wi-Fi normalize to this schema.
     """
-    device_id: str = Field(..., min_length=2, max_length=100, description="Unique hardware identifier")
+    device_id: str = Field(default="SANJEEVNI-ESP32-001", min_length=2, max_length=100, description="Unique hardware identifier")
     sensor_timestamp: Union[datetime, str, int, float] = Field(
         ...,
         alias="timestamp",
@@ -129,19 +129,24 @@ class CanonicalSensorPacket(BaseModel):
         description="Optional packet counter if emitted by firmware"
     )
 
-    # Photoplethysmography (PPG) - MAX30102
+    # Photoplethysmography (PPG) & HR/SpO2
+    heart_rate: Optional[int] = Field(None, description="Calculated heart rate in BPM")
+    valid_heart_rate: Optional[int] = Field(None, description="1 if heart rate reading is valid, 0 otherwise")
+    spo2: Optional[int] = Field(None, description="Calculated blood oxygen saturation %")
+    valid_spo2: Optional[int] = Field(None, description="1 if SpO2 reading is valid, 0 otherwise")
+
     ir: int = Field(..., alias="IR", description="Infrared raw photodiode ADC count")
     red: int = Field(..., alias="RED", description="Red raw photodiode ADC count")
 
-    # Accelerometer - MPU6050
-    accel_x: int = Field(..., alias="Accel_X", description="X-axis raw acceleration")
-    accel_y: int = Field(..., alias="Accel_Y", description="Y-axis raw acceleration")
-    accel_z: int = Field(..., alias="Accel_Z", description="Z-axis raw acceleration")
+    # Accelerometer - MPU6050 (Supports raw counts or float g)
+    accel_x: float = Field(..., alias="Accel_X", description="X-axis acceleration")
+    accel_y: float = Field(..., alias="Accel_Y", description="Y-axis acceleration")
+    accel_z: float = Field(..., alias="Accel_Z", description="Z-axis acceleration")
 
-    # Gyroscope - MPU6050
-    gyro_x: int = Field(..., alias="Gyro_X", description="X-axis raw gyroscope")
-    gyro_y: int = Field(..., alias="Gyro_Y", description="Y-axis raw gyroscope")
-    gyro_z: int = Field(..., alias="Gyro_Z", description="Z-axis raw gyroscope")
+    # Gyroscope - MPU6050 (Supports raw counts or float dps)
+    gyro_x: float = Field(..., alias="Gyro_X", description="X-axis gyroscope")
+    gyro_y: float = Field(..., alias="Gyro_Y", description="Y-axis gyroscope")
+    gyro_z: float = Field(..., alias="Gyro_Z", description="Z-axis gyroscope")
 
     # Body Temperature - ClosedCube MAX30205 (°F)
     temperature: float = Field(..., alias="Temp_F", description="Skin temperature in Fahrenheit")
@@ -163,20 +168,24 @@ class CanonicalSensorPacket(BaseModel):
         "populate_by_name": True,
         "json_schema_extra": {
             "example": {
-                "device_id": "ESP32_WEARABLE_DEV",
-                "timestamp": "13-09-2026 15:30:00.125",
-                "IR": 27156,
-                "RED": 18003,
-                "Accel_X": 1056,
-                "Accel_Y": 1152,
-                "Accel_Z": 16428,
-                "Gyro_X": -136,
-                "Gyro_Y": 221,
-                "Gyro_Z": 110,
-                "Temp_F": 91.58,
-                "GSR_Raw": 1911,
-                "GSR_Voltage": 1.54,
-                "transport": "HTTP"
+                "device_id": "SANJEEVNI-ESP32-001",
+                "sensor_timestamp": "2026-09-16T20:26:52.887Z",
+                "sequence_number": 980,
+                "heart_rate": 136,
+                "valid_heart_rate": 1,
+                "spo2": 99,
+                "valid_spo2": 1,
+                "ir": 76991,
+                "red": 129006,
+                "accel_x": -0.082092,
+                "accel_y": 0.696716,
+                "accel_z": -0.767517,
+                "gyro_x": 6.763359,
+                "gyro_y": -1.366412,
+                "gyro_z": -0.832061,
+                "Temp_F": 95.9,
+                "gsr_raw": 0,
+                "gsr_voltage": 0.0
             }
         }
     }
@@ -234,11 +243,9 @@ class CanonicalSensorPacket(BaseModel):
 
     @field_validator("accel_x", "accel_y", "accel_z", "gyro_x", "gyro_y", "gyro_z")
     @classmethod
-    def validate_motion_ranges(cls, v: int, info) -> int:
+    def validate_motion_ranges(cls, v: float, info) -> float:
         if math.isnan(v) or math.isinf(v):
             raise ValueError(f"{info.field_name} cannot be NaN or Infinity")
-        if v < -32768 or v > 32767:
-            raise ValueError(f"{info.field_name} value {v} exceeds 16-bit signed integer limits")
         return v
 
     @model_validator(mode="after")
@@ -255,6 +262,18 @@ class CanonicalSensorPacket(BaseModel):
 
 # Backward-compatibility alias for RawSensorPacket
 RawSensorPacket = CanonicalSensorPacket
+
+
+class SensorBatchPayload(BaseModel):
+    """Batched sensor telemetry request payload sent by ESP32 firmware (~5 readings per POST)."""
+    device_id: Optional[str] = Field(None, description="Outer hardware device identifier")
+    transport: Optional[Union[SensorTransport, str]] = Field(default=SensorTransport.HTTP, description="Ingestion transport mechanism")
+    readings: Optional[List[CanonicalSensorPacket]] = Field(None, description="List of batched real sensor readings")
+    packets: Optional[List[CanonicalSensorPacket]] = Field(None, description="Alternative list alias for batched readings")
+
+    model_config = {
+        "populate_by_name": True
+    }
 
 
 class SensorBatchPacket(BaseModel):
@@ -274,10 +293,13 @@ class RawCSVLinePayload(BaseModel):
 
 class SensorIngestResponse(BaseModel):
     """Authoritative response payload for sensor ingestion."""
+    status: str = "success"
     accepted: bool = True
     success: bool = True
     device_id: str
-    received_at: datetime
+    received: int = 1
+    latest_sequence_number: Optional[int] = None
+    received_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     sensor_timestamp: Optional[datetime] = None
     quality: SensorQuality = SensorQuality.GOOD
     is_duplicate: bool = False
@@ -285,4 +307,5 @@ class SensorIngestResponse(BaseModel):
     packets_received: int = 1
     packets_ingested: int = 1
     sampling_rate_hz: Optional[float] = None
-    message: str = "Sensor telemetry validated and persisted successfully"
+    message: str = "Sensor telemetry validated and updated in live memory cache"
+

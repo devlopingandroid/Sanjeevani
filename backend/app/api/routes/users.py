@@ -8,7 +8,6 @@ from app.schemas.user import UserResponse, UserUpdate
 from app.models.user import User
 from app.api.dependencies import get_current_user
 from app.core.config import settings
-from app.services.cloudinary_service import cloudinary_service
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
@@ -76,15 +75,18 @@ async def upload_user_avatar(
             detail="File size exceeds maximum limit of 5MB.",
         )
 
-    # Server-side upload to Cloudinary
-    secure_url, public_id = cloudinary_service.upload_profile_avatar(
-        file_bytes=content,
-        user_id=current_user.id,
-        old_public_id=current_user.profile_image_public_id,
-    )
+    # Save avatar image locally in settings.avatars_dir
+    ext = orig_ext if orig_ext in VALID_EXTENSIONS else ".jpg"
+    filename = f"user_{current_user.id}_avatar{ext}"
+    file_path = os.path.join(settings.avatars_dir, filename)
 
-    current_user.profile_image_url = secure_url
-    current_user.profile_image_public_id = public_id
+    with open(file_path, "wb") as f:
+        f.write(content)
+
+    relative_url = f"/uploads/avatars/{filename}"
+
+    current_user.profile_image_url = relative_url
+    current_user.profile_image_public_id = None
     db.commit()
     db.refresh(current_user)
     return current_user
