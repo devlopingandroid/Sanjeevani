@@ -126,7 +126,15 @@ export default function EditProfileScreen() {
         } catch (uploadErr: any) {
           console.error('[EditProfile] Avatar upload failed:', uploadErr);
           setIsSaving(false);
+<<<<<<< Updated upstream
           setErrorMessage('Unable to update profile photo. Please try again.');
+=======
+          const isUnavailable = uploadErr?.statusCode === 503;
+          const userMsg = isUnavailable
+            ? 'Profile photo service is currently unavailable.'
+            : (uploadErr?.message || 'Unable to update profile photo. Please try again.');
+          setErrorMessage(userMsg);
+>>>>>>> Stashed changes
           return;
         }
       }

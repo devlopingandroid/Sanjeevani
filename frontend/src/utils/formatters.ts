@@ -11,6 +11,11 @@ export function formatBpm(bpm: number | null | undefined): string {
   return `${Math.round(bpm)}`;
 }
 
+export function formatSpo2(spo2: number | null | undefined): string {
+  if (spo2 === null || spo2 === undefined || isNaN(spo2)) return '--';
+  return `${Math.round(spo2)}%`;
+}
+
 export function formatMs(ms: number | null | undefined): string {
   if (ms === null || ms === undefined || isNaN(ms)) return '--';
   return `${Math.round(ms)}`;

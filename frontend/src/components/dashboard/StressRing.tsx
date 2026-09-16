@@ -26,43 +26,58 @@ export const StressRing: React.FC<StressRingProps> = ({
   message,
   onPress,
 }) => {
-  const isRealData = dataStatus === DataStatus.REAL_DATA && score !== null && score !== undefined;
+  const isTelemetryActive = dataStatus === DataStatus.REAL_DATA || dataStatus === DataStatus.INSUFFICIENT_DATA;
+  const isModelEvaluated = isTelemetryActive && score !== null && score !== undefined;
 
   const getRingColor = () => {
-    if (!isRealData) return colors.statusNoData;
-    if (level === 'HIGH' || (score !== undefined && score !== null && score > 65)) {
-      return colors.stressHigh;
+    if (isModelEvaluated) {
+      if (level === 'HIGH' || (score !== undefined && score !== null && score > 65)) {
+        return colors.stressHigh;
+      }
+      if (level === 'MODERATE' || (score !== undefined && score !== null && score > 35)) {
+        return colors.stressModerate;
+      }
+      return colors.stressLow;
     }
-    if (level === 'MODERATE' || (score !== undefined && score !== null && score > 35)) {
-      return colors.stressModerate;
+    if (isTelemetryActive) {
+      return colors.statusConnected;
     }
-    return colors.stressLow;
+    return colors.statusNoData;
   };
 
   const getSubtitle = () => {
-    if (!isRealData) {
-      switch (dataStatus) {
-        case DataStatus.INSUFFICIENT_DATA:
-          return 'Collecting sensor window (30s)...';
-        case DataStatus.DEVICE_DISCONNECTED:
-          return 'Wearable disconnected';
-        case DataStatus.SENSOR_ERROR:
-          return 'Sensor lead-off detected';
-        case DataStatus.MODEL_UNAVAILABLE:
-          return 'ML model offline';
-        case DataStatus.NO_DATA:
-        default:
-          return 'Waiting for sensor telemetry';
-      }
+    if (isModelEvaluated) {
+      if (level === 'HIGH') return 'Elevated Sympathetic Arousal';
+      if (level === 'MODERATE') return 'Moderate Stress Detected';
+      return 'Calm & Restorative Baseline';
     }
-    if (level === 'HIGH') return 'Elevated Sympathetic Arousal';
-    if (level === 'MODERATE') return 'Moderate Stress Detected';
-    return 'Calm & Restorative Baseline';
+    if (isTelemetryActive) {
+      return 'Live wearable telemetry active';
+    }
+    switch (dataStatus) {
+      case DataStatus.DEVICE_DISCONNECTED:
+        return 'Wearable disconnected';
+      case DataStatus.SENSOR_ERROR:
+        return 'Sensor lead-off detected';
+      case DataStatus.MODEL_UNAVAILABLE:
+        return 'ML model offline';
+      case DataStatus.NO_DATA:
+      default:
+        return 'Waiting for sensor telemetry';
+    }
+  };
+
+  const getFooterHint = () => {
+    if (isModelEvaluated) return 'Tap for 26-feature breakdown →';
+    if (isTelemetryActive) return 'Tap Evaluate 30s Buffer below to run ML inference';
+    return 'Connect wearable to begin stream';
   };
 
   const ringColor = getRingColor();
-  const displayScore = isRealData ? formatStressScore(score) : '--';
-  const displayLevel = isRealData ? (level || 'EVALUATED') : 'NO TELEMETRY';
+  const displayScore = isModelEvaluated ? formatStressScore(score) : '--';
+  const displayLevel = isModelEvaluated
+    ? (level || 'EVALUATED')
+    : (isTelemetryActive ? 'CONNECTED' : 'NO TELEMETRY');
 
   return (
     <TouchableOpacity
@@ -77,10 +92,10 @@ export const StressRing: React.FC<StressRingProps> = ({
 
       {/* Ring Visualizer */}
       <View style={styles.ringOuter}>
-        <View style={[styles.ringTrack, { borderColor: isRealData ? colors.primarySubtle : colors.border }]}>
+        <View style={[styles.ringTrack, { borderColor: isTelemetryActive ? colors.primarySubtle : colors.border }]}>
           <View style={[styles.ringProgress, { borderColor: ringColor }]} />
           <View style={styles.ringInner}>
-            <Text style={[styles.scoreValue, { color: isRealData ? colors.textPrimary : colors.textMuted }]}>
+            <Text style={[styles.scoreValue, { color: isModelEvaluated ? colors.textPrimary : colors.textMuted }]}>
               {displayScore}
             </Text>
             <Text style={[styles.levelLabel, { color: ringColor }]}>
@@ -99,9 +114,7 @@ export const StressRing: React.FC<StressRingProps> = ({
       ) : null}
 
       <View style={styles.footerHint}>
-        <Text style={styles.footerHintText}>
-          {isRealData ? 'Tap for 26-feature breakdown →' : 'Connect wearable to begin stream'}
-        </Text>
+        <Text style={styles.footerHintText}>{getFooterHint()}</Text>
       </View>
     </TouchableOpacity>
   );

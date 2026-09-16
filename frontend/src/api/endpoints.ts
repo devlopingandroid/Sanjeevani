@@ -4,10 +4,12 @@
  * Maps directly to backend FastAPI routes.
  */
 
+export const CANONICAL_DEVICE_ID = 'SANJEEVNI-ESP32-001';
+
 export const ENDPOINTS = {
   HEALTH: {
     ROOT: '/',
-    LIVENESS: '/health',
+    LIVENESS: '/health/live',
     READINESS: '/health/ready',
   },
   DASHBOARD: {
@@ -42,4 +44,28 @@ export const ENDPOINTS = {
   AI: {
     CHAT: '/api/v1/ai/chat',
   },
+<<<<<<< Updated upstream
+=======
+  CONVERSATIONS: {
+    LIST: '/api/v1/conversations',
+    CREATE: '/api/v1/conversations',
+    GET: (id: string) => `/api/v1/conversations/${encodeURIComponent(id)}`,
+    DELETE: (id: string) => `/api/v1/conversations/${encodeURIComponent(id)}`,
+    MESSAGES: (id: string) => `/api/v1/conversations/${encodeURIComponent(id)}/messages`,
+  },
+  TRUSTED_CONTACT: {
+    BASE: '/api/v1/trusted-contact',
+  },
+  WELLNESS: {
+    CONTEXT: '/api/v1/wellness-context',
+    EXERCISE_VIDEOS: (exerciseName: string) => `/api/v1/wellness/exercises/${encodeURIComponent(exerciseName)}/videos`,
+  },
+  SENSORS: {
+    LATEST: (deviceId?: string) =>
+      deviceId ? `/api/v1/sensors/latest/${encodeURIComponent(deviceId)}` : '/api/v1/sensors/latest',
+    LIVE_HISTORY: (deviceId: string, limit = 100) =>
+      `/api/v1/sensors/live/${encodeURIComponent(deviceId)}?limit=${limit}`,
+    INGEST: '/api/v1/sensors/ingest',
+  },
+>>>>>>> Stashed changes
 } as const;

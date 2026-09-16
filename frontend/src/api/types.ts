@@ -28,6 +28,7 @@ export interface VitalsSnapshot {
   temperature_f: number | null;
   skin_conductance_us: number | null;
   motion_magnitude: number | null;
+  spo2?: number | null;
   last_updated?: string | null;
 }
 
