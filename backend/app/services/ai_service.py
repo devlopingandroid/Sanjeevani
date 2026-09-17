@@ -119,6 +119,7 @@ class AIService:
         include_health_context: bool = True,
         device_id: Optional[str] = None,
     ) -> AIChatResponse:
+<<<<<<< Updated upstream
         """Sends a structured request to Mistral AI with DB persistence and safe health domain checking."""
         # 1. Resolve or create conversation container in database
         if conversation_id and conversation_id.strip():
@@ -212,6 +213,25 @@ class AIService:
                 )
 
             logger.warning("Mistral API key not configured on backend.")
+=======
+        """Sends a structured request to Mistral AI / xAI with safe context and returns assistant message."""
+        if settings.MISTRAL_API_KEY:
+            api_key = settings.MISTRAL_API_KEY
+            model_name = settings.MISTRAL_MODEL or "open-mistral-7b"
+            base_url = settings.MISTRAL_BASE_URL.rstrip('/')
+            endpoint_url = f"{base_url}/v1/chat/completions" if not base_url.endswith("/v1") else f"{base_url}/chat/completions"
+            timeout = getattr(settings, "MISTRAL_TIMEOUT_SECONDS", 30.0)
+            provider_name = "Mistral AI"
+        elif settings.XAI_API_KEY:
+            api_key = settings.XAI_API_KEY
+            model_name = settings.XAI_MODEL or "grok-4.6"
+            base_url = settings.XAI_BASE_URL.rstrip('/')
+            endpoint_url = f"{base_url}/chat/completions"
+            timeout = getattr(settings, "XAI_TIMEOUT_SECONDS", 30.0)
+            provider_name = "xAI"
+        else:
+            logger.warning("Neither Mistral AI nor xAI API key configured on backend.")
+>>>>>>> Stashed changes
             raise SanjeevniException(
                 status_code=503,
                 error_code=ErrorCode.MODEL_UNAVAILABLE,
@@ -247,26 +267,41 @@ class AIService:
         # Append current user message
         messages.append({"role": "user", "content": message})
 
+<<<<<<< Updated upstream
         base_url = settings.MISTRAL_BASE_URL.rstrip('/')
         endpoint_url = f"{base_url}/v1/chat/completions" if not base_url.endswith("/v1") else f"{base_url}/chat/completions"
 
+=======
+>>>>>>> Stashed changes
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
         }
         payload = {
+<<<<<<< Updated upstream
             "model": settings.MISTRAL_MODEL,
+=======
+            "model": model_name,
+>>>>>>> Stashed changes
             "messages": messages,
             "temperature": 0.5,
             "max_tokens": 800,
         }
 
         try:
+<<<<<<< Updated upstream
             async with httpx.AsyncClient(timeout=settings.MISTRAL_TIMEOUT_SECONDS) as client:
                 response = await client.post(endpoint_url, headers=headers, json=payload)
 
             if response.status_code == 429:
                 logger.warning("Mistral API rate limit encountered.")
+=======
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                response = await client.post(endpoint_url, headers=headers, json=payload)
+
+            if response.status_code == 429:
+                logger.warning(f"{provider_name} API rate limit encountered.")
+>>>>>>> Stashed changes
                 raise SanjeevniException(
                     status_code=429,
                     error_code=ErrorCode.VALIDATION_ERROR,
@@ -282,7 +317,11 @@ class AIService:
                 )
 
             if response.status_code != 200:
+<<<<<<< Updated upstream
                 logger.error(f"Mistral API error response ({response.status_code}): {response.text}")
+=======
+                logger.error(f"{provider_name} API error response: {response.status_code} - {response.text}")
+>>>>>>> Stashed changes
                 raise SanjeevniException(
                     status_code=503,
                     error_code=ErrorCode.MODEL_UNAVAILABLE,
@@ -303,9 +342,13 @@ class AIService:
 
             return AIChatResponse(
                 reply=reply,
+<<<<<<< Updated upstream
                 message=reply,
                 conversation_id=conversation.id,
                 model=settings.MISTRAL_MODEL,
+=======
+                model=model_name,
+>>>>>>> Stashed changes
                 timestamp=datetime.now(timezone.utc).isoformat(),
                 health_context_included=health_context_included,
                 status="success",
@@ -314,14 +357,22 @@ class AIService:
             )
 
         except httpx.TimeoutException:
+<<<<<<< Updated upstream
             logger.warning("Mistral API request timed out.")
+=======
+            logger.warning(f"{provider_name} API request timed out.")
+>>>>>>> Stashed changes
             raise SanjeevniException(
                 status_code=504,
                 error_code=ErrorCode.MODEL_UNAVAILABLE,
                 message="Unable to connect to Sanjeevni AI. Request timed out.",
             )
         except httpx.RequestError as exc:
+<<<<<<< Updated upstream
             logger.error(f"Network error communicating with Mistral API: {exc}")
+=======
+            logger.error(f"Network error communicating with {provider_name} API: {exc}")
+>>>>>>> Stashed changes
             raise SanjeevniException(
                 status_code=503,
                 error_code=ErrorCode.MODEL_UNAVAILABLE,

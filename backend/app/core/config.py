@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     VERSION: str = "1.0.0"
     ENVIRONMENT: str = "development"  # development | staging | production
     API_V1_STR: str = "/api/v1"
+    DEMO_MODE: bool = False  # Temporary exhibition demo mode flag (default False)
 
     # Database
     # Default to local SQLite for local dev/testing if PostgreSQL URL is not provided.
@@ -49,12 +50,17 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
 
+<<<<<<< Updated upstream
     # Mistral AI Integration
+=======
+    # Mistral AI / LLM Integration
+>>>>>>> Stashed changes
     MISTRAL_API_KEY: Optional[str] = None
     MISTRAL_MODEL: str = "open-mistral-7b"
     MISTRAL_BASE_URL: str = "https://api.mistral.ai"
     MISTRAL_TIMEOUT_SECONDS: float = 30.0
 
+<<<<<<< Updated upstream
     # Risk Engine Lookback Window Configuration
     RISK_ENGINE_LOOKBACK_COUNT: int = 5
     RISK_ENGINE_LOOKBACK_MINUTES: int = 60
@@ -80,6 +86,13 @@ class Settings(BaseSettings):
     YOUTUBE_API_BASE_URL: str = "https://www.googleapis.com/youtube/v3"
     YOUTUBE_MAX_RESULTS: int = 5
 
+=======
+    # xAI (Grok) Integration
+    XAI_API_KEY: Optional[str] = None
+    XAI_MODEL: str = "grok-4.6"
+    XAI_BASE_URL: str = "https://api.x.ai/v1"
+    XAI_TIMEOUT_SECONDS: float = 30.0
+>>>>>>> Stashed changes
 
     # Uploads & Media
     @property

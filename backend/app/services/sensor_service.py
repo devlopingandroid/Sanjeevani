@@ -121,6 +121,8 @@ class SensorService:
 
         # 3. Add to rolling buffer in RAM for signal processing
         sample_dict = packet.model_dump()
+        from app.services.demo_service import inject_demo_gsr_if_needed
+        inject_demo_gsr_if_needed(sample_dict)
         buffer_manager.add_sample(packet.device_id, sample_dict)
 
         # 4. Enqueue for asynchronous background database persistence
@@ -328,6 +330,9 @@ class SensorService:
         DeviceService.update_heartbeat(db, device_id, transport="HTTP", is_valid=True)
 
         sample_dicts = [p.model_dump() for p in packets]
+        from app.services.demo_service import inject_demo_gsr_if_needed
+        for idx, s in enumerate(sample_dicts):
+            inject_demo_gsr_if_needed(s, index=idx)
         buffer_manager.add_batch(device_id, sample_dicts)
 
         now_utc = datetime.now(timezone.utc)

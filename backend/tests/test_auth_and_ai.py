@@ -204,8 +204,13 @@ async def test_ai_chat_mistral_unavailable_honest_error(client):
     token = login_resp.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
 
+<<<<<<< Updated upstream
     # When MISTRAL_API_KEY is None or empty, returns 503 honest error
     with patch.object(settings, "MISTRAL_API_KEY", None):
+=======
+    # When both MISTRAL_API_KEY and XAI_API_KEY are None or empty, returns 503 honest error
+    with patch.object(settings, "MISTRAL_API_KEY", None), patch.object(settings, "XAI_API_KEY", None):
+>>>>>>> Stashed changes
         resp = client.post(
             "/api/v1/ai/chat",
             json={"message": "How do I lower stress?"},
