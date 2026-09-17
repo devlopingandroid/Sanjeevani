@@ -44,8 +44,6 @@ export const ENDPOINTS = {
   AI: {
     CHAT: '/api/v1/ai/chat',
   },
-<<<<<<< Updated upstream
-=======
   CONVERSATIONS: {
     LIST: '/api/v1/conversations',
     CREATE: '/api/v1/conversations',
@@ -67,5 +65,4 @@ export const ENDPOINTS = {
       `/api/v1/sensors/live/${encodeURIComponent(deviceId)}?limit=${limit}`,
     INGEST: '/api/v1/sensors/ingest',
   },
->>>>>>> Stashed changes
 } as const;

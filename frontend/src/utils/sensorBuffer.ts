@@ -107,8 +107,9 @@ export class RollingSensorBuffer {
       ? latest.temperature
       : null;
 
-    // 4. Skin Conductance (uS) estimated from GSR voltage
-    const gsrVoltage = latest.gsr_voltage ?? 0;
+    // 4. Skin Conductance (uS) estimated from GSR voltage / raw
+    const rawGsr = (latest as any).gsr_raw ?? (latest as any).GSR_Raw ?? 0;
+    const gsrVoltage = (latest as any).gsr_voltage ?? (latest as any).GSR_Voltage ?? (rawGsr > 0 ? (rawGsr / 4095.0) * 3.3 : 0);
     const skinConductanceUs = gsrVoltage > 0 ? Number(((gsrVoltage / 3.3) * 10.0).toFixed(2)) : 0;
 
     // 5. Motion Magnitude (Units)

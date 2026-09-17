@@ -24,6 +24,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useHealthData } from '../../src/context/HealthDataContext';
+import { useAuth } from '../../src/context/AuthContext';
 import { colors, spacing, typography, radii } from '../../src/theme';
 import { StressRing } from '../../src/components/dashboard/StressRing';
 import { MetricCard } from '../../src/components/dashboard/MetricCard';
@@ -42,12 +43,8 @@ import { DataStatus } from '../../src/api/types';
 
 export default function HomeScreen() {
   const router = useRouter();
-<<<<<<< Updated upstream
-  const { summary, isRefreshing, refreshData, triggerStressEvaluation } = useHealthData();
-=======
   const { user } = useAuth();
   const { summary, bufferSampleCount, isRefreshing, refreshData, triggerStressEvaluation } = useHealthData();
->>>>>>> Stashed changes
   const [selectedTrendPeriod, setSelectedTrendPeriod] = useState<'Today' | 'Week' | 'Month'>('Today');
 
   const vitals = summary?.vitals;

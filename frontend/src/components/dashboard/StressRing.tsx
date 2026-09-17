@@ -26,10 +26,14 @@ export const StressRing: React.FC<StressRingProps> = ({
   message,
   onPress,
 }) => {
-  const isTelemetryActive = dataStatus === DataStatus.REAL_DATA || dataStatus === DataStatus.INSUFFICIENT_DATA;
-  const isModelEvaluated = isTelemetryActive && score !== null && score !== undefined;
+  const isDemoMode = dataStatus === DataStatus.DEMO_DATA;
+  const isTelemetryActive = dataStatus === DataStatus.REAL_DATA || dataStatus === DataStatus.INSUFFICIENT_DATA || isDemoMode;
+  const isModelEvaluated = (isTelemetryActive || isDemoMode) && score !== null && score !== undefined;
 
   const getRingColor = () => {
+    if (isDemoMode) {
+      return '#F59E0B'; // Amber demo accent
+    }
     if (isModelEvaluated) {
       if (level === 'HIGH' || (score !== undefined && score !== null && score > 65)) {
         return colors.stressHigh;
@@ -46,6 +50,9 @@ export const StressRing: React.FC<StressRingProps> = ({
   };
 
   const getSubtitle = () => {
+    if (isDemoMode) {
+      return 'Temporary exhibition simulation — GSR sensor unavailable.';
+    }
     if (isModelEvaluated) {
       if (level === 'HIGH') return 'Elevated Sympathetic Arousal';
       if (level === 'MODERATE') return 'Moderate Stress Detected';
@@ -68,6 +75,7 @@ export const StressRing: React.FC<StressRingProps> = ({
   };
 
   const getFooterHint = () => {
+    if (isDemoMode) return 'Exhibition Simulation Mode Active';
     if (isModelEvaluated) return 'Tap for 26-feature breakdown →';
     if (isTelemetryActive) return 'Tap Evaluate 30s Buffer below to run ML inference';
     return 'Connect wearable to begin stream';
@@ -76,17 +84,24 @@ export const StressRing: React.FC<StressRingProps> = ({
   const ringColor = getRingColor();
   const displayScore = isModelEvaluated ? formatStressScore(score) : '--';
   const displayLevel = isModelEvaluated
-    ? (level || 'EVALUATED')
-    : (isTelemetryActive ? 'CONNECTED' : 'NO TELEMETRY');
+    ? (isDemoMode ? 'DEMO STRESS' : (level || 'EVALUATED'))
+    : (isDemoMode ? 'DEMO DATA' : (isTelemetryActive ? 'CONNECTED' : 'NO TELEMETRY'));
 
   return (
     <TouchableOpacity
       activeOpacity={onPress ? 0.9 : 1}
       onPress={onPress}
-      style={[styles.container, shadows.cardFloating]}
+      style={[styles.container, shadows.cardFloating, isDemoMode && { borderColor: '#F59E0B' }]}
     >
       <View style={styles.headerRow}>
-        <Text style={styles.cardHeader}>CURRENT ESTIMATED STRESS</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <Text style={styles.cardHeader}>CURRENT ESTIMATED STRESS</Text>
+          {isDemoMode && (
+            <View style={{ backgroundColor: '#FEF3C7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginLeft: 8 }}>
+              <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#D97706' }}>DEMO DATA</Text>
+            </View>
+          )}
+        </View>
         <View style={[styles.statusDot, { backgroundColor: ringColor }]} />
       </View>
 
@@ -114,7 +129,7 @@ export const StressRing: React.FC<StressRingProps> = ({
       ) : null}
 
       <View style={styles.footerHint}>
-        <Text style={styles.footerHintText}>{getFooterHint()}</Text>
+        <Text style={[styles.footerHintText, isDemoMode && { color: '#D97706' }]}>{getFooterHint()}</Text>
       </View>
     </TouchableOpacity>
   );
