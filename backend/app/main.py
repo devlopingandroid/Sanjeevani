@@ -57,10 +57,15 @@ async def lifespan(app: FastAPI):
     # Attempt to load the stress ML model
     model_loader.load()
 
+    # Start background database queue writer worker
+    from app.services.sensor_queue_writer import sensor_queue_writer
+    await sensor_queue_writer.start()
+
     yield
 
     # --- Shutdown ---
     logger.info(f"Shutting down {settings.PROJECT_NAME}...")
+    await sensor_queue_writer.stop()
 
 
 def create_application() -> FastAPI:

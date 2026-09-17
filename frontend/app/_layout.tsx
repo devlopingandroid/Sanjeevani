@@ -116,6 +116,33 @@ function RootNavigationGuard() {
         }}
       />
       <Stack.Screen
+        name="consult-detail"
+        options={{
+          title: 'Professional Profile',
+          headerBackTitle: 'Back',
+        }}
+      />
+      <Stack.Screen
+        name="consult-voice"
+        options={{
+          title: 'Voice Consultation Demo',
+          headerBackTitle: 'Back',
+        }}
+      />
+      <Stack.Screen
+        name="consult-chat"
+        options={{
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        name="consult-submit-problem"
+        options={{
+          title: 'Submit a Problem',
+          headerBackTitle: 'Back',
+        }}
+      />
+      <Stack.Screen
         name="developer/model-test"
         options={{
           headerShown: false,

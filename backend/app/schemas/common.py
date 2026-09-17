@@ -13,6 +13,7 @@ class DataStatus(str, Enum):
     whenever real hardware readings are absent or incomplete.
     """
     REAL_DATA = "REAL_DATA"
+    DEMO_DATA = "DEMO_DATA"
     NO_DATA = "NO_DATA"
     DEVICE_DISCONNECTED = "DEVICE_DISCONNECTED"
     INSUFFICIENT_DATA = "INSUFFICIENT_DATA"

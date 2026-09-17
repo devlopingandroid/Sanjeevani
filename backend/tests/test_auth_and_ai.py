@@ -107,22 +107,17 @@ def test_update_profile_and_avatar(client):
     unauth_patch = client.patch("/api/v1/users/me", json={"full_name": "Hacker"})
     assert unauth_patch.status_code == 401
 
-    # 6. Upload avatar (valid PNG) with mocked Cloudinary upload
-    mock_url = "https://res.cloudinary.com/sanjeevni/image/upload/v12345678/sanjeevni/profile-avatars/user_1_avatar.png"
-    mock_public_id = "sanjeevni/profile-avatars/user_1_avatar"
-
+    # 6. Upload avatar (valid PNG) with local file upload
     fake_png_data = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15c4"
     files = {"file": ("avatar.png", io.BytesIO(fake_png_data), "image/png")}
 
-    with patch("app.services.cloudinary_service.cloudinary_service.upload_profile_avatar", return_value=(mock_url, mock_public_id)):
-        avatar_resp = client.post("/api/v1/users/me/avatar", files=files, headers=headers)
-        assert avatar_resp.status_code == 200
-        avatar_data = avatar_resp.json()
-        assert avatar_data["profile_image_url"] == mock_url
-        assert avatar_data["full_name"] == "Yash Goel"
-        assert "password" not in avatar_data
-        assert "hashed_password" not in avatar_data
-        assert "CLOUDINARY_API_SECRET" not in avatar_data
+    avatar_resp = client.post("/api/v1/users/me/avatar", files=files, headers=headers)
+    assert avatar_resp.status_code == 200
+    avatar_data = avatar_resp.json()
+    assert "/uploads/avatars/user_" in avatar_data["profile_image_url"]
+    assert avatar_data["full_name"] == "Yash Goel"
+    assert "password" not in avatar_data
+    assert "hashed_password" not in avatar_data
 
     # 7. Avatar upload with invalid file type rejected
     bad_files = {"file": ("malicious.exe", io.BytesIO(b"malware"), "application/octet-stream")}
@@ -136,7 +131,7 @@ def test_update_profile_and_avatar(client):
     # 9. Verify GET /users/me returns persisted profile_image_url
     refreshed_me = client.get("/api/v1/users/me", headers=headers)
     assert refreshed_me.status_code == 200
-    assert refreshed_me.json()["profile_image_url"] == mock_url
+    assert "/uploads/avatars/user_" in refreshed_me.json()["profile_image_url"]
     assert refreshed_me.json()["full_name"] == "Yash Goel"
 
 
@@ -154,25 +149,6 @@ def test_avatar_upload_oversized_file_rejected(client):
     resp = client.post("/api/v1/users/me/avatar", files=files, headers=headers)
     assert resp.status_code == 400
     assert "exceeds maximum limit" in resp.json()["detail"].lower()
-
-
-def test_avatar_upload_unconfigured_cloudinary_returns_honest_error(client):
-    email = f"unconfig_user_{time.time()}@sanjeevni.com"
-    password = "SecurePassword123!"
-    client.post("/api/v1/auth/register", json={"email": email, "password": password, "full_name": "Unconfigured User"})
-    login = client.post("/api/v1/auth/login", json={"email": email, "password": password})
-    token = login.json()["access_token"]
-    headers = {"Authorization": f"Bearer {token}"}
-
-    fake_png_data = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15c4"
-    files = {"file": ("avatar.png", io.BytesIO(fake_png_data), "image/png")}
-
-    with patch.object(settings, "CLOUDINARY_CLOUD_NAME", None):
-        resp = client.post("/api/v1/users/me/avatar", files=files, headers=headers)
-        assert resp.status_code == 503
-        data = resp.json()
-        assert data["error_code"] == "CLOUDINARY_UNCONFIGURED"
-        assert "profile photo service is currently unavailable" in data["message"].lower()
 
 
 def test_user_cannot_modify_another_users_avatar(client):
@@ -193,13 +169,10 @@ def test_user_cannot_modify_another_users_avatar(client):
     u2_headers = {"Authorization": f"Bearer {u2_token}"}
 
     # Upload avatar for User 1
-    mock_url_u1 = "https://res.cloudinary.com/sanjeevni/image/upload/v1/sanjeevni/profile-avatars/user_1_avatar.png"
     files = {"file": ("u1.png", io.BytesIO(b"\x89PNG\r\n\x1a\n"), "image/png")}
-
-    with patch("app.services.cloudinary_service.cloudinary_service.upload_profile_avatar", return_value=(mock_url_u1, "public_1")):
-        res_u1 = client.post("/api/v1/users/me/avatar", files=files, headers=u1_headers)
-        assert res_u1.status_code == 200
-        assert res_u1.json()["profile_image_url"] == mock_url_u1
+    res_u1 = client.post("/api/v1/users/me/avatar", files=files, headers=u1_headers)
+    assert res_u1.status_code == 200
+    assert "/uploads/avatars/user_" in res_u1.json()["profile_image_url"]
 
     # Verify User 2's profile avatar is still None
     u2_me = client.get("/api/v1/users/me", headers=u2_headers)
@@ -231,8 +204,13 @@ async def test_ai_chat_mistral_unavailable_honest_error(client):
     token = login_resp.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
 
+<<<<<<< Updated upstream
     # When MISTRAL_API_KEY is None or empty, returns 503 honest error
     with patch.object(settings, "MISTRAL_API_KEY", None):
+=======
+    # When both MISTRAL_API_KEY and XAI_API_KEY are None or empty, returns 503 honest error
+    with patch.object(settings, "MISTRAL_API_KEY", None), patch.object(settings, "XAI_API_KEY", None):
+>>>>>>> Stashed changes
         resp = client.post(
             "/api/v1/ai/chat",
             json={"message": "How do I lower stress?"},
