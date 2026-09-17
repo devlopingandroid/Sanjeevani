@@ -19,10 +19,12 @@ import {
   ScrollView,
   RefreshControl,
   TouchableOpacity,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '../../src/context/AuthContext';
 import { useHealthData } from '../../src/context/HealthDataContext';
 import { useAuth } from '../../src/context/AuthContext';
 import { colors, spacing, typography, radii } from '../../src/theme';
@@ -31,6 +33,7 @@ import { MetricCard } from '../../src/components/dashboard/MetricCard';
 import { DeviceStatusBadge } from '../../src/components/dashboard/DeviceStatusBadge';
 import { SanjeevniInsight } from '../../src/components/dashboard/SanjeevniInsight';
 import { SectionHeader } from '../../src/components/common/SectionHeader';
+import { resolveAvatarUrl, getUserInitials } from '../../src/utils/avatar';
 import {
   formatBpm,
   formatSpo2,
@@ -46,6 +49,11 @@ export default function HomeScreen() {
   const { user } = useAuth();
   const { summary, bufferSampleCount, isRefreshing, refreshData, triggerStressEvaluation } = useHealthData();
   const [selectedTrendPeriod, setSelectedTrendPeriod] = useState<'Today' | 'Week' | 'Month'>('Today');
+  const [avatarError, setAvatarError] = useState<boolean>(false);
+
+  const userInitials = getUserInitials(user?.full_name, user?.email);
+  const avatarUrl = resolveAvatarUrl(user?.profile_image_url);
+  const displayName = user?.full_name || user?.email || 'User';
 
   const vitals = summary?.vitals;
   const stress = summary?.stress;
@@ -69,15 +77,28 @@ export default function HomeScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <View style={styles.userInfo}>
-            <View style={styles.avatarCircle}>
-              <Text style={styles.avatarText}>SJ</Text>
-            </View>
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => router.push('/(tabs)/profile')}
+            style={styles.userInfo}
+          >
+            {!avatarError && avatarUrl ? (
+              <Image
+                source={{ uri: avatarUrl }}
+                style={styles.avatarImage}
+                resizeMode="cover"
+                onError={() => setAvatarError(true)}
+              />
+            ) : (
+              <View style={styles.avatarCircle}>
+                <Text style={styles.avatarText}>{userInitials}</Text>
+              </View>
+            )}
             <View style={styles.userTextContainer}>
               <Text style={styles.greetingText}>Welcome,</Text>
-              <Text style={styles.userNameText}>User</Text>
+              <Text style={styles.userNameText}>{displayName}</Text>
             </View>
-          </View>
+          </TouchableOpacity>
 
           <View style={styles.headerRight}>
             <DeviceStatusBadge
@@ -270,6 +291,12 @@ const styles = StyleSheet.create({
   userInfo: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  avatarImage: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    marginRight: spacing.md,
   },
   avatarCircle: {
     width: 44,

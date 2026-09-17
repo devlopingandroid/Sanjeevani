@@ -108,6 +108,19 @@ function RootNavigationGuard() {
           headerBackTitle: 'Back',
         }}
       />
+      <Stack.Screen
+        name="trusted-contact"
+        options={{
+          title: 'Trusted Contact & Consent',
+          headerBackTitle: 'Back',
+        }}
+      />
+      <Stack.Screen
+        name="developer/model-test"
+        options={{
+          headerShown: false,
+        }}
+      />
     </Stack>
   );
 }

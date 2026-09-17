@@ -78,7 +78,7 @@ describe('Profile & Avatar Logic Verification', () => {
     }
   });
 
-  test('authService.uploadAvatar sends POST /api/v1/users/me/avatar', async () => {
+  test('authService.uploadAvatar sends POST /api/v1/users/me/avatar with valid FormData body', async () => {
     const originalFetch = (global as any).fetch;
     const mockUser = {
       id: 1,
@@ -117,7 +117,7 @@ describe('Profile & Avatar Logic Verification', () => {
     });
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
     });
 
     expect(result.canceled).toBe(true);

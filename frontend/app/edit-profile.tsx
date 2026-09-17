@@ -35,6 +35,9 @@ export default function EditProfileScreen() {
 
   const [fullName, setFullName] = useState<string>(user?.full_name || '');
   const [selectedImageUri, setSelectedImageUri] = useState<string | null>(null);
+  const [selectedImageMime, setSelectedImageMime] = useState<string | null>(null);
+  const [selectedImageName, setSelectedImageName] = useState<string | null>(null);
+  const [imageLoadError, setImageLoadError] = useState<boolean>(false);
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -53,18 +56,22 @@ export default function EditProfileScreen() {
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        setSelectedImageUri(result.assets[0].uri);
+        const asset = result.assets[0];
+        setSelectedImageUri(asset.uri);
+        setSelectedImageMime(asset.mimeType || null);
+        setSelectedImageName(asset.fileName || null);
+        setImageLoadError(false);
         setErrorMessage(null);
       }
     } catch (err: any) {
-      Alert.alert('Error', err.message || 'Unable to open image library.');
+      Alert.alert('Error', err.message || 'Photo permission is required to choose a profile picture.');
     }
   };
 
@@ -74,19 +81,24 @@ export default function EditProfileScreen() {
       if (!permission.granted) {
         Alert.alert(
           'Permission Required',
-          'Please grant camera permission to take a new profile photo.'
+          'Photo permission is required to choose a profile picture.'
         );
         return;
       }
 
       const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        setSelectedImageUri(result.assets[0].uri);
+        const asset = result.assets[0];
+        setSelectedImageUri(asset.uri);
+        setSelectedImageMime(asset.mimeType || null);
+        setSelectedImageName(asset.fileName || null);
+        setImageLoadError(false);
         setErrorMessage(null);
       }
     } catch (err: any) {
@@ -122,7 +134,11 @@ export default function EditProfileScreen() {
       // 1. If a new photo was chosen, upload it to the backend
       if (selectedImageUri) {
         try {
-          updatedProfile = await authService.uploadAvatar(selectedImageUri);
+          updatedProfile = await authService.uploadAvatar(
+            selectedImageUri,
+            selectedImageMime || undefined,
+            selectedImageName || undefined
+          );
         } catch (uploadErr: any) {
           console.error('[EditProfile] Avatar upload failed:', uploadErr);
           setIsSaving(false);
@@ -199,11 +215,12 @@ export default function EditProfileScreen() {
               onPress={handleChangePhotoPress}
               style={styles.avatarWrapper}
             >
-              {currentAvatarUrl ? (
+              {!imageLoadError && currentAvatarUrl ? (
                 <Image
                   source={{ uri: currentAvatarUrl }}
                   style={styles.avatarImage}
                   resizeMode="cover"
+                  onError={() => setImageLoadError(true)}
                 />
               ) : (
                 <View style={styles.initialsContainer}>

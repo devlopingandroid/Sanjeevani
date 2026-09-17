@@ -22,6 +22,8 @@ class ErrorCode(str, Enum):
     NOT_FOUND = "NOT_FOUND"
     VALIDATION_ERROR = "VALIDATION_ERROR"
     INTERNAL_SERVER_ERROR = "INTERNAL_SERVER_ERROR"
+    CLOUDINARY_UNCONFIGURED = "CLOUDINARY_UNCONFIGURED"
+    CLOUDINARY_UPLOAD_FAILED = "CLOUDINARY_UPLOAD_FAILED"
 
 
 class SanjeevniException(HTTPException):
@@ -30,7 +32,7 @@ class SanjeevniException(HTTPException):
     def __init__(
         self,
         status_code: int,
-        error_code: ErrorCode,
+        error_code: Any,
         message: str,
         details: Optional[Dict[str, Any]] = None,
     ):
@@ -99,11 +101,12 @@ class SensorErrorException(SanjeevniException):
 
 async def sanjeevni_exception_handler(request: Request, exc: SanjeevniException) -> JSONResponse:
     """Standardized handler for domain exceptions."""
+    err_code = exc.error_code.value if hasattr(exc.error_code, "value") else str(exc.error_code)
     return JSONResponse(
         status_code=exc.status_code,
         content={
             "success": False,
-            "error_code": exc.error_code.value,
+            "error_code": err_code,
             "message": exc.message,
             "details": exc.details,
         },
