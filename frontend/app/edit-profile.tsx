@@ -142,9 +142,7 @@ export default function EditProfileScreen() {
         } catch (uploadErr: any) {
           console.error('[EditProfile] Avatar upload failed:', uploadErr);
           setIsSaving(false);
-          const isUnavailable =
-            uploadErr?.statusCode === 503 ||
-            uploadErr?.errorCode === 'CLOUDINARY_UNCONFIGURED';
+          const isUnavailable = uploadErr?.statusCode === 503;
           const userMsg = isUnavailable
             ? 'Profile photo service is currently unavailable.'
             : (uploadErr?.message || 'Unable to update profile photo. Please try again.');

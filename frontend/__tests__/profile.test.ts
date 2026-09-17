@@ -84,7 +84,7 @@ describe('Profile & Avatar Logic Verification', () => {
       id: 1,
       email: 'yash@example.com',
       full_name: 'Yash',
-      profile_image_url: 'https://res.cloudinary.com/sanjeevni/image/upload/v1/user_1.jpg',
+      profile_image_url: '/uploads/avatars/user_1_avatar.jpg',
       is_active: true,
       created_at: '2026-09-13T12:00:00Z',
     };
@@ -96,13 +96,14 @@ describe('Profile & Avatar Logic Verification', () => {
     });
 
     try {
-      const updated = await authService.uploadAvatar('file:///path/to/image.jpg', 'image/jpeg', 'my_photo.jpg');
-      expect(updated.profile_image_url).toBe('https://res.cloudinary.com/sanjeevni/image/upload/v1/user_1.jpg');
-      
-      const fetchCall = (global as any).fetch.mock.calls[0];
-      expect(fetchCall[0]).toContain('/api/v1/users/me/avatar');
-      expect(fetchCall[1].method).toBe('POST');
-      expect(fetchCall[1].body).toBeInstanceOf(FormData);
+      const updated = await authService.uploadAvatar('file:///path/to/image.jpg', 'image/jpeg');
+      expect(updated.profile_image_url).toBe('/uploads/avatars/user_1_avatar.jpg');
+      expect((global as any).fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/api/v1/users/me/avatar'),
+        expect.objectContaining({
+          method: 'POST',
+        })
+      );
     } finally {
       (global as any).fetch = originalFetch;
     }

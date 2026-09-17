@@ -26,6 +26,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/context/AuthContext';
 import { useHealthData } from '../../src/context/HealthDataContext';
+import { useAuth } from '../../src/context/AuthContext';
 import { colors, spacing, typography, radii } from '../../src/theme';
 import { StressRing } from '../../src/components/dashboard/StressRing';
 import { MetricCard } from '../../src/components/dashboard/MetricCard';
@@ -35,6 +36,7 @@ import { SectionHeader } from '../../src/components/common/SectionHeader';
 import { resolveAvatarUrl, getUserInitials } from '../../src/utils/avatar';
 import {
   formatBpm,
+  formatSpo2,
   formatMs,
   formatTempF,
   formatGSR,
@@ -45,7 +47,7 @@ import { DataStatus } from '../../src/api/types';
 export default function HomeScreen() {
   const router = useRouter();
   const { user } = useAuth();
-  const { summary, isRefreshing, refreshData, triggerStressEvaluation } = useHealthData();
+  const { summary, bufferSampleCount, isRefreshing, refreshData, triggerStressEvaluation } = useHealthData();
   const [selectedTrendPeriod, setSelectedTrendPeriod] = useState<'Today' | 'Week' | 'Month'>('Today');
   const [avatarError, setAvatarError] = useState<boolean>(false);
 
@@ -124,7 +126,9 @@ export default function HomeScreen() {
             style={styles.evaluateBtn}
           >
             <Ionicons name="pulse" size={16} color={colors.primary} />
-            <Text style={styles.evaluateBtnText}>Evaluate 30s Buffer</Text>
+            <Text style={styles.evaluateBtnText}>
+              Evaluate 30s Buffer ({bufferSampleCount || 0} samples)
+            </Text>
           </TouchableOpacity>
         </View>
 
@@ -148,13 +152,13 @@ export default function HomeScreen() {
               subtitle="MAX30102 PPG"
             />
             <MetricCard
-              icon="pulse"
-              iconColor="#0D9488"
-              accentBg="#CCFBF1"
-              title="HRV (RMSSD)"
-              value={formatMs(vitals?.hrv_rmssd_ms)}
-              unit="ms"
-              subtitle="Autonomic Index"
+              icon="medical"
+              iconColor="#0284C7"
+              accentBg="#E0F2FE"
+              title="Blood Oxygen"
+              value={formatSpo2(vitals?.spo2)}
+              unit=""
+              subtitle="SpO2 Sensor"
             />
           </View>
 
@@ -170,8 +174,8 @@ export default function HomeScreen() {
             />
             <MetricCard
               icon="water"
-              iconColor="#0284C7"
-              accentBg="#E0F2FE"
+              iconColor="#0D9488"
+              accentBg="#CCFBF1"
               title="Skin Conductance"
               value={formatGSR(vitals?.skin_conductance_us)}
               unit=""
@@ -188,6 +192,15 @@ export default function HomeScreen() {
               value={formatMotion(vitals?.motion_magnitude)}
               unit="units"
               subtitle="MPU6050 3D Mag"
+            />
+            <MetricCard
+              icon="pulse"
+              iconColor="#10B981"
+              accentBg="#D1FAE5"
+              title="HRV (RMSSD)"
+              value={formatMs(vitals?.hrv_rmssd_ms)}
+              unit="ms"
+              subtitle="Autonomic Index"
             />
           </View>
         </View>

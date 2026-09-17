@@ -4,10 +4,12 @@
  * Maps directly to backend FastAPI routes.
  */
 
+export const CANONICAL_DEVICE_ID = 'SANJEEVNI-ESP32-001';
+
 export const ENDPOINTS = {
   HEALTH: {
     ROOT: '/',
-    LIVENESS: '/health',
+    LIVENESS: '/health/live',
     READINESS: '/health/ready',
   },
   DASHBOARD: {
@@ -57,6 +59,13 @@ export const ENDPOINTS = {
   WELLNESS: {
     CONTEXT: '/api/v1/wellness-context',
     EXERCISE_VIDEOS: (exerciseName: string) => `/api/v1/wellness/exercises/${encodeURIComponent(exerciseName)}/videos`,
+  },
+  SENSORS: {
+    LATEST: (deviceId?: string) =>
+      deviceId ? `/api/v1/sensors/latest/${encodeURIComponent(deviceId)}` : '/api/v1/sensors/latest',
+    LIVE_HISTORY: (deviceId: string, limit = 100) =>
+      `/api/v1/sensors/live/${encodeURIComponent(deviceId)}?limit=${limit}`,
+    INGEST: '/api/v1/sensors/ingest',
   },
 } as const;
 
