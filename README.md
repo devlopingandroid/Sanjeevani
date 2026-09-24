@@ -1,660 +1,227 @@
-# 🩺🩺 SANJEEVNI
+# Sanjeevni
 
-### ESP32-Powered Wearable Wellness & Real-Time Physiological Monitoring Platform
+![Platform: ESP32](https://img.shields.io/badge/Platform-ESP32-0F766E?style=flat-square)
+![Backend: Python](https://img.shields.io/badge/Backend-Python-2563EB?style=flat-square)
+![Domain: Wearable sensing](https://img.shields.io/badge/Domain-Wearable_sensing-7C3AED?style=flat-square)
+![Scope: Research and engineering](https://img.shields.io/badge/Scope-Research_%26_engineering-B45309?style=flat-square)
 
-**Sanjeevni** is an ESP32-based wearable health and wellness monitoring platform designed to continuously capture physiological and activity-related parameters through multiple sensors and make the collected data available for real-time analysis and visualization.
+### ESP32-based wearable sensing and wellness monitoring platform
 
-The system combines **embedded hardware, wearable sensing, a Python backend, and a modern frontend** into a unified health-monitoring platform.
+**Sanjeevni connects wearable sensors to a Python backend and a live monitoring interface.** It brings optical pulse signals, temperature, motion, and galvanic skin response into one data pipeline, allowing engineers and researchers to observe measurements from a connected wearable.
 
-> **Core Principle:** Sanjeevni is designed around **real sensor data only**.
-> **No mock data. No fabricated readings. No simulated health parameters.**
+The project combines embedded firmware, sensor integration, backend processing, and frontend visualization. Its central design requirement is simple: **every reading presented as live sensor data must originate from physical hardware.** Missing or invalid measurements must remain visibly unavailable.
 
----
+> **Project scope:** Sanjeevni is a research and engineering platform, not a certified medical device. This README describes the supplied project design; repository-specific commands, deployed features, and performance results require confirmation against the implementation.
 
-## 📌 Table of Contents
+## Contents
 
-* [Overview](#-overview)
-* [Problem Statement](#-problem-statement)
-* [Objectives](#-objectives)
-* [Key Features](#-key-features)
-* [System Architecture](#-system-architecture)
-* [Hardware](#-hardware)
-* [Sensors & Parameters](#-sensors--parameters)
-* [Software Stack](#-software-stack)
-* [Project Structure](#-project-structure)
-* [Data Flow](#-data-flow)
-* [Backend](#-backend)
-* [Firmware](#-firmware)
-* [Frontend](#-frontend)
-* [Real-Time Monitoring](#-real-time-monitoring)
-* [Data Integrity Policy](#-data-integrity-policy)
-* [Installation & Setup](#-installation--setup)
-* [Environment Variables](#-environment-variables)
-* [Running the Project](#-running-the-project)
-* [API Overview](#-api-overview)
-* [Sensor Calibration](#-sensor-calibration)
-* [Error Handling](#-error-handling)
-* [Development Workflow](#-development-workflow)
-* [Future Scope](#-future-scope)
-* [Limitations](#-limitations)
-* [Contributing](#-contributing)
-* [License](#-license)
-* [Disclaimer](#-disclaimer)
+| Explore | What you will find |
+| --- | --- |
+| [Purpose and capabilities](#purpose-and-capabilities) | Product purpose and intended functionality. |
+| [System architecture](#system-architecture) | Sensor-to-dashboard flow and responsibilities. |
+| [Hardware and measurements](#hardware-and-measurements) | Components, interfaces, and signal interpretation. |
+| [Software components](#software-components) | Technology stack and repository structure. |
+| [Data integrity and reliability](#data-integrity-and-reliability) | Rules for valid, missing, and stale measurements. |
+| [Getting started](#getting-started) | Requirements, setup sequence, and configuration. |
+| [Integration reference](#integration-reference) | Backend integration responsibilities. |
+| [Validation and limitations](#validation-and-limitations) | Calibration and acceptance criteria. |
+| [Roadmap](#roadmap) | Future development areas. |
+| [Contributing](#contributing) · [License](#license) | Contribution guidance and licensing. |
 
----
+## Purpose and capabilities
 
-## 🔎 Overview
+Wearable monitoring requires more than reading a sensor: measurements must travel reliably from the device to an application, retain their meaning, and clearly communicate whether they are valid and current.
 
-Sanjeevni is a **wearable physiological monitoring system** built around the ESP32 microcontroller.
+Sanjeevni is designed to address that complete workflow through:
 
-The wearable collects physiological and motion data using sensors such as:
+| Capability | Purpose |
+| --- | --- |
+| Multi-sensor acquisition | Collect optical, temperature, motion, and skin-response signals through one ESP32 controller. |
+| Connected data pipeline | Transfer device readings to a backend for validation and processing. |
+| Live visualization | Present incoming measurements and device status through a dashboard. |
+| Modular software layers | Allow sensor drivers, processing logic, and interface components to evolve independently. |
+| Explicit data quality states | Distinguish valid readings from missing, invalid, disconnected, or stale data. |
 
-* ❤️ **MAX30102** — PPG-based heart-rate / SpO₂ sensing
-* 🏃 **MPU6050** — accelerometer and gyroscope for motion/activity data
-* 🌡️ **MAX30205** — body-temperature-oriented temperature sensing
-* ✋ **GSR** — galvanic skin response through an analog input
+Historical views depend on the implemented storage and retrieval features. Derived metrics such as heart rate and SpO₂ depend on the available processing algorithms and signal quality; the sensor list alone does not establish validated measurement accuracy.
 
-The ESP32 acts as the edge device responsible for sensor acquisition and transmission.
+## System architecture
 
-The collected readings are sent to the **Python backend**, where they are processed, validated, stored, and exposed to the frontend application.
-
-The frontend provides a user-facing interface for monitoring the incoming physiological data.
-
-### High-Level Architecture
-
-```text
-┌──────────────────────────────────────────────┐
-│                 WEARABLE DEVICE               │
-│                                                │
-│                    ESP32                      │
-│                                                │
-│   ┌─────────┐ ┌─────────┐ ┌─────────────┐     │
-│   │MAX30102 │ │MPU6050  │ │ MAX30205    │     │
-│   │  PPG    │ │ IMU     │ │ Temperature │     │
-│   └────┬────┘ └────┬────┘ └──────┬──────┘     │
-│        │           │             │            │
-│        └───────────┴─────────────┘            │
-│                     │                         │
-│                  GSR ADC                      │
-└─────────────────────┬──────────────────────────┘
-                       │
-                       │ Real Sensor Data
-                       ▼
-┌──────────────────────────────────────────────┐
-│                PYTHON BACKEND                 │
-│                                                │
-│  Validation → Processing → API → Storage      │
-└─────────────────────┬──────────────────────────┘
-                       │
-                       │ REST / Real-Time Data
-                       ▼
-┌──────────────────────────────────────────────┐
-│                   FRONTEND                    │
-│                                                │
-│   Dashboard • Live Monitoring • Analytics     │
-└──────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    A["Optical, temperature and motion sensors"] -->|I²C| C["ESP32 firmware"]
+    B["GSR sensor"] -->|Analog input| C
+    C -->|Sensor payloads| D["Python backend"]
+    D -->|Validated readings| E["Monitoring frontend"]
+    D -->|Persistence, where implemented| F["Data storage"]
+    F -->|Historical readings| D
 ```
 
----
+The ESP32 initializes the sensors, acquires readings, and packages them for transmission. The backend receives those payloads, validates their structure and values, applies supported processing, and makes the results available to the frontend. Storage supports historical retrieval where implemented.
 
-## 🎯 Problem Statement
+Wi-Fi is the intended connected transport, with serial communication available for development or debugging as supported by the firmware. The exact device protocol and frontend update mechanism—polling, WebSocket, or server-sent events—must match the implementation.
 
-Traditional health monitoring often depends on periodic measurements or dedicated medical equipment.
+“Live” describes updates as readings arrive; no measured end-to-end latency or guaranteed update rate is specified in the supplied documentation.
 
-Sanjeevni explores a different approach:
+## Hardware and measurements
 
-> **Can a compact wearable continuously collect multiple physiological and activity-related parameters and make those readings available through a connected software platform?**
+| Component | Interface | Signal or measurement | Interpretation |
+| --- | --- | --- | --- |
+| **ESP32** | I²C, ADC, connectivity | Sensor acquisition and transmission | Coordinates the wearable data pipeline. |
+| **MAX30102** | I²C | Optical photoplethysmography (PPG) signals | Input to heart-rate and SpO₂ estimation algorithms; derived values require suitable signal quality and validation. |
+| **MPU6050** | I²C | Three-axis acceleration and three-axis angular velocity | Provides motion data for activity and orientation-related analysis. |
+| **MAX30205** | I²C | Temperature at the sensor | Must not automatically be interpreted as core body temperature. |
+| **GSR module** | Analog ADC | Skin-response signal | Raw ADC readings require the module’s conversion and calibration details before being reported as physical conductance or resistance. |
 
-The project focuses on building the complete pipeline:
+GSR provides a physiological signal for exploratory analysis; it does not directly diagnose stress or a psychological condition.
 
-```text
-Physical Sensor
-      ↓
-ESP32
-      ↓
-Data Acquisition
-      ↓
-Communication
-      ↓
-Python Backend
-      ↓
-Validation / Processing
-      ↓
-Frontend
-      ↓
-Real-Time Monitoring
-```
+Pin assignments, module supply requirements, I²C configuration, and the GSR analog input must follow the actual board and firmware configuration. A verified wiring diagram and bill of materials are needed for a reproducible hardware build; neither is established by the supplied README.
 
----
+## Software components
 
-## 🎯 Objectives
+| Component | Documented technology | Responsibility |
+| --- | --- | --- |
+| Firmware | ESP32-compatible C/C++; Arduino IDE or PlatformIO | Sensor initialization, acquisition, payload generation, connectivity, and device error reporting. |
+| Backend | Python | Payload validation, supported signal processing, persistence, and API access. |
+| Frontend | JavaScript/TypeScript application; framework unspecified | Live measurements, per-sensor visualization, connection state, and supported historical views. |
+| Storage | Implementation unspecified | Retention and retrieval of measurements, where available. |
 
-The primary objectives of Sanjeevni are:
+### Repository organization
 
-1. Build a compact ESP32-based wearable.
-2. Collect physiological parameters from real sensors.
-3. Capture motion and activity information.
-4. Establish reliable communication between wearable and backend.
-5. Process and validate incoming sensor data.
-6. Provide real-time monitoring through a frontend interface.
-7. Maintain a strict **no-mock-data** architecture.
-8. Create a modular platform that can be extended with additional sensors and analytics.
-
----
-
-## ✨ Key Features
-
-### 🩺 Multi-Parameter Monitoring
-
-Sanjeevni is designed to collect multiple parameters from a single wearable platform.
-
-Current sensor modules include:
-
-| Sensor   | Parameter / Signal                                     | Interface  |
-| -------- | -------------------------------------------------------- | ---------- |
-| MAX30102 | PPG / Heart-rate related signal / SpO₂-related signal    | I²C        |
-| MPU6050  | Accelerometer + Gyroscope                                 | I²C        |
-| MAX30205 | Temperature                                                | I²C        |
-| GSR      | Galvanic Skin Response                                     | Analog ADC |
-
-### ⚡ Real-Time Data Pipeline
-
-Sensor readings move through the system without artificially generated values:
-
-```text
-Sensor → ESP32 → Backend → Frontend
-```
-
-### 📊 Live Monitoring
-
-The frontend presents incoming sensor measurements in a user-friendly dashboard, updating as new readings arrive from the backend.
-
-### 🔐 Data Integrity
-
-The project strictly prohibits:
-
-* Randomly generated health values
-* Hard-coded physiological readings
-* Fake sensor responses
-* Placeholder readings presented as real measurements
-* Synthetic data silently entering production flows
-
-### 🧩 Modular Architecture
-
-Each layer is independently extensible:
-
-```text
-Hardware
-   ↓
-Firmware
-   ↓
-Communication
-   ↓
-Backend
-   ↓
-Frontend
-```
-
-New sensors, processing modules, APIs, and UI components can therefore be added without redesigning the entire system.
-
----
-
-## 🏗 System Architecture
-
-Sanjeevni follows a layered architecture, where each layer has a single, well-defined responsibility and communicates with adjacent layers through a stable interface.
-
-| Layer         | Responsibility                                                  |
-| ------------- | ----------------------------------------------------------------- |
-| Hardware      | Physical sensing (PPG, IMU, temperature, GSR)                     |
-| Firmware      | Sensor drivers, acquisition loop, transmission to backend          |
-| Communication | Wi-Fi / serial transport of sensor payloads                        |
-| Backend       | Validation, processing, storage, and API exposure                  |
-| Frontend      | Visualization, live dashboards, historical analytics               |
-
-This separation allows each layer to be developed, tested, and replaced independently — for example, swapping the communication transport or adding a new sensor module without touching the frontend.
-
----
-
-## 🧰 Hardware
-
-### ESP32
-
-The ESP32 serves as the primary edge-computing and communication controller.
-
-Responsibilities include:
-
-* Sensor initialization
-* Sensor polling
-* Raw data acquisition
-* Basic signal processing
-* Device communication
-* Data transmission to backend
-* Connection management
-
-### MAX30102
-
-The MAX30102 is used as the wearable's optical sensing module.
-
-It provides photoplethysmography (**PPG**) signals that can be processed for physiological measurements such as:
-
-* Heart-rate estimation
-* Blood-oxygen-related estimation
-
-> Actual derived values depend on signal quality, sensor placement, calibration, algorithms, and environmental conditions.
-
-### MPU6050
-
-The MPU6050 combines:
-
-* 3-axis accelerometer
-* 3-axis gyroscope
-
-It is used for:
-
-* Motion detection
-* Activity analysis
-* Movement patterns
-* Orientation-related information
-
-### MAX30205
-
-The MAX30205 is a high-accuracy temperature sensor designed for temperature measurement.
-
-Within Sanjeevni, it is used for temperature monitoring.
-
-> Sensor temperature should not automatically be interpreted as medically equivalent to a clinically measured core body temperature.
-
-### GSR Sensor
-
-The Galvanic Skin Response sensor measures changes associated with the electrical conductance/resistance of the skin.
-
-The ESP32 reads the GSR signal through an analog input.
-
-Potential applications include:
-
-* Arousal-related analysis
-* Stress-related signal exploration
-* Activity/context correlation
-
-> GSR readings should be treated as **physiological signals**, not direct psychological diagnoses.
-
----
-
-## 📡 Sensors & Parameters
-
-The Sanjeevni architecture is designed around a multi-modal sensing model.
-
-```text
-                   SANJEEVNI
-                       │
-       ┌───────────────┼────────────────┐
-       │               │                │
-       ▼               ▼                ▼
-   Physiological     Motion          Skin Signal
-      Signals        Signals
-       │               │                │
-       ▼               ▼                ▼
-   MAX30102         MPU6050            GSR
-       │               │                │
-       ├───────────────┴────────────────┤
-       │                                │
-       ▼                                ▼
-   Temperature                    Combined Dataset
-       │
-       ▼
-   MAX30205
-```
-
-### Current Measurement Categories
-
-**Cardiovascular-related**
-* PPG waveform
-* Heart-rate estimation
-* SpO₂-related estimation
-
-**Temperature**
-* Temperature sensor reading
-
-**Motion**
-* Accelerometer X/Y/Z
-* Gyroscope X/Y/Z
-
-**Electrodermal**
-* GSR ADC reading
-
----
-
-## 💻 Software Stack
-
-### Firmware
-* ESP32
-* Arduino / ESP32-compatible firmware
-* C/C++
-* I²C
-* ADC
-* Sensor-specific libraries
-
-### Backend
-* Python
-* REST API
-* Data validation
-* Sensor-data processing
-* Real-time communication as implemented by the backend
-
-See [`backend/README.md`](backend/README.md) for backend-specific documentation.
-
-### Frontend
-* Modern JavaScript/TypeScript framework
-* Real-time monitoring components
-* Sensor dashboards
-* Data visualization
-* Device/status information
-
----
-
-## 📁 Project Structure
-
-A typical repository structure is:
+The source documentation describes the following **expected layout**. Confirm these paths against the repository before using them.
 
 ```text
 Sanjeevni/
-│
-├── backend/
-│   ├── README.md
-│   ├── app/
-│   ├── requirements.txt
-│   └── ...
-│
-├── frontend/
-│   ├── src/
-│   ├── package.json
-│   └── ...
-│
-├── firmware/
-│   ├── ESP32/
-│   │   ├── MAX30102/
-│   │   ├── MPU6050/
-│   │   ├── MAX30205/
-│   │   └── GSR/
-│   │
-│   └── ...
-│
-├── docs/
-│   ├── architecture/
-│   ├── hardware/
-│   ├── research/
-│   └── ...
-│
-├── README.md
-├── .gitignore
-└── LICENSE
+├── firmware/                 # Device acquisition and communication
+│   └── ESP32/                # ESP32 firmware and sensor modules
+├── backend/                  # Python service and data processing
+│   └── README.md             # Backend setup and API reference
+├── frontend/                 # Monitoring interface and visualizations
+├── docs/                     # Architecture, wiring and calibration
+└── README.md                 # Project overview and integration guide
 ```
 
-> Directory names may evolve as the project develops. Keep this section synchronized with the actual repository structure.
+| Path | Expected contents |
+| --- | --- |
+| `firmware/` | ESP32 firmware, sensor drivers, and hardware configuration. |
+| `backend/` | Python service, dependencies, configuration, and backend documentation. |
+| `frontend/` | Dashboard source, package manifest, and application configuration. |
+| `docs/` | Architecture notes, wiring information, calibration records, and research material. |
 
----
+The source references `backend/README.md` for service-specific setup and API details. That file was not included with the supplied material.
 
-## 🔄 Data Flow
+## Data integrity and reliability
 
-The complete Sanjeevni data pipeline is:
+**Live measurements must be traceable to real sensor acquisition.** Random values, hard-coded physiological values, and fabricated fallback readings must never appear as live measurements.
 
-```text
-┌─────────────┐
-│   Sensors   │
-└──────┬──────┘
-       │  Raw measurements
-       ▼
-┌─────────────┐
-│    ESP32    │
-└──────┬──────┘
-       │  Device communication (Wi-Fi / Serial)
-       ▼
-┌─────────────┐
-│   Backend   │
-│  Validation │
-│  Processing │
-│   Storage   │
-└──────┬──────┘
-       │  REST / Real-time data
-       ▼
-┌─────────────┐
-│  Frontend   │
-│  Dashboard  │
-└─────────────┘
-```
+Expected behavior across the system:
 
-**Step-by-step:**
+| Condition | Required behavior |
+| --- | --- |
+| Sensor unavailable or read failure | Report the affected sensor as unavailable; do not substitute a plausible value. |
+| Malformed or invalid payload | Return an explicit validation error and prevent invalid data from being presented as valid. |
+| Network interruption | Report connectivity loss and use the implemented reconnection behavior. |
+| No recent reading | Mark the measurement as stale or disconnected; do not present an old reading as current. |
+| Derived metric unavailable | Keep the metric unavailable until the algorithm has sufficient valid input. |
+| Software test fixture | Clearly label and isolate test data from the live measurement pipeline. |
 
-1. **Sensors** capture raw physiological and motion signals.
-2. **ESP32** polls each sensor over I²C/ADC and packages the readings.
-3. **Communication layer** transmits the payload to the backend (e.g., over Wi-Fi via REST/WebSocket, or serial during development/debugging).
-4. **Backend** validates incoming payloads, rejects malformed or out-of-range data, processes/derives higher-level metrics, and persists readings.
-5. **Frontend** consumes the processed data via API/real-time channel and renders it on the dashboard.
+The firmware, backend, and frontend should preserve these states consistently. A missing reading is not the same as a measured zero.
 
----
-
-## 🖥 Backend
-
-The Python backend is responsible for:
-
-* Receiving sensor payloads from the ESP32
-* Validating payload structure and value ranges
-* Processing/deriving physiological metrics where applicable
-* Persisting readings to storage
-* Exposing REST and/or real-time endpoints to the frontend
-
-Detailed backend setup, endpoint definitions, and configuration are documented separately in [`backend/README.md`](backend/README.md).
-
----
-
-## 🔌 Firmware
-
-The firmware layer runs on the ESP32 and is responsible for:
-
-* Initializing I²C and ADC peripherals
-* Reading each sensor at an appropriate polling interval
-* Packaging readings into a structured payload (e.g., JSON)
-* Managing Wi-Fi/network connectivity
-* Transmitting payloads to the backend
-* Basic on-device error handling (sensor disconnects, retries)
-
-Firmware source for each sensor module lives under `firmware/ESP32/<SENSOR_NAME>/`.
-
----
-
-## 🎨 Frontend
-
-The frontend provides the user-facing layer of Sanjeevni:
-
-* Live dashboard for incoming sensor data
-* Per-sensor visualizations (heart rate, SpO₂, temperature, motion, GSR)
-* Device/connection status indicators
-* Historical data views (where supported by the backend)
-
----
-
-## 📈 Real-Time Monitoring
-
-Sanjeevni is designed so that sensor readings are visible on the frontend shortly after acquisition, with the backend acting as the intermediary that validates and forwards data. The exact transport (polling, WebSocket, SSE, etc.) depends on the backend implementation — see `backend/README.md`.
-
----
-
-## 🔐 Data Integrity Policy
-
-Sanjeevni enforces a **strict no-mock-data policy** across every layer of the stack:
-
-* ❌ No randomly generated health values
-* ❌ No hard-coded physiological readings
-* ❌ No fake sensor responses used as if real
-* ❌ No placeholder readings presented as real measurements
-* ❌ No synthetic data silently entering production flows
-
-If a sensor is disconnected, faulty, or returns invalid data, the system should **surface an error or "no data" state** rather than substitute a fabricated value. This applies to firmware, backend, and frontend code alike, including during development and testing (use clearly labeled test fixtures, never silently-injected fake readings).
-
----
-
-## ⚙️ Installation & Setup
+## Getting started
 
 ### Prerequisites
 
-* ESP32 development board
-* MAX30102, MPU6050, MAX30205, and GSR sensor modules
-* Arduino IDE or PlatformIO
-* Python 3.10+
-* Node.js (for frontend, if applicable)
-* Git
+| Requirement | Details |
+| --- | --- |
+| Hardware | ESP32 and MAX30102, MPU6050, MAX30205, and GSR modules. |
+| Assembly | Verified wiring, suitable power supply, and USB flashing connection. |
+| Firmware tools | Arduino IDE or PlatformIO, matching the firmware project. |
+| Backend runtime | Python 3.10+ as specified in the source documentation; confirm dependencies. |
+| Frontend runtime | Node.js and the package manager required by the project manifest. |
+| Development access | Git and network connectivity between the device and backend. |
 
-### Clone the Repository
+### Setup sequence
 
-```bash
-git clone https://github.com/<your-org>/Sanjeevni.git
-cd Sanjeevni
-```
+| Step | Action | Completion check |
+| --- | --- | --- |
+| 01 | Obtain the actual repository and review its module documentation. | Dependency manifests and entry points identified. |
+| 02 | Create a Python environment, install declared dependencies, configure and start the backend. | Service starts with the intended configuration. |
+| 03 | Install frontend dependencies, set its backend URL, and run its declared development script. | Dashboard opens and can reach the backend. |
+| 04 | Verify hardware wiring and power, then initialize each sensor. | Device logs show successful acquisition. |
+| 05 | Set the ESP32 board, network credentials, and ingestion endpoint; flash the intended firmware. | Wearable connects and transmits readings. |
+| 06 | Follow a measurement from the device through ingestion to the dashboard. | Fresh hardware readings appear in the interface. |
 
----
+The ESP32 must use a backend address reachable from its network. A `localhost` address on the ESP32 refers to the device itself, not the development computer.
 
-## 🔑 Environment Variables
+### Configuration reference
 
-Backend and frontend configuration should be supplied via environment variables rather than hard-coded values. Typical variables include:
+Exact variable names must come from the repository’s configuration files. The following are configuration categories, not a verified `.env` schema.
 
-```env
-# Backend
-HOST=0.0.0.0
-PORT=8000
-DATABASE_URL=your_database_connection_string
-LOG_LEVEL=INFO
+| Component | Configuration to confirm |
+| --- | --- |
+| Firmware | Wi-Fi credentials, backend address, sensor pin assignments, acquisition interval, and transmission interval. |
+| Backend | Bind address, service port, storage connection, logging, and permitted frontend origins where applicable. |
+| Frontend | Backend base URL and live-update configuration. |
 
-# Device / Firmware
-WIFI_SSID=your_wifi_ssid
-WIFI_PASSWORD=your_wifi_password
-BACKEND_ENDPOINT=http://<backend-host>:8000/api/sensor-data
+Keep credentials out of committed source files. Example configuration files should contain placeholders only.
 
-# Frontend
-VITE_API_BASE_URL=http://localhost:8000
-```
+## Integration reference
 
-> Exact variable names depend on the actual backend/frontend implementation — keep this section in sync with `.env.example` files in each module.
+The backend design includes four integration responsibilities:
 
----
+| Operation | Intended use |
+| --- | --- |
+| Ingest measurements | Receive sensor payloads from the wearable. |
+| Retrieve latest measurements | Supply the dashboard with the most recent valid readings. |
+| Retrieve history | Return stored readings where historical access is implemented. |
+| Retrieve device status | Expose device connectivity and measurement availability. |
 
-## ▶️ Running the Project
+The supplied draft included illustrative routes, but did not establish an executable API contract. Confirm endpoint paths, request schemas, units, timestamps, authentication, and error responses in the backend before integrating a client. Streaming support also needs implementation confirmation.
 
-**1. Flash the firmware**
+## Validation and limitations
 
-```bash
-# Using Arduino IDE: open firmware/ESP32/<module>/<module>.ino and upload
-# Using PlatformIO:
-cd firmware/ESP32
-pio run --target upload
-```
+### Sensor validation
 
-**2. Start the backend**
+| Sensor | Validation focus |
+| --- | --- |
+| MAX30102 | Placement, contact quality, movement, ambient light, and validation of the derived-metric algorithm. |
+| MPU6050 | Stationary offset calibration and consistency of axis orientation and units. |
+| MAX30205 | Comparison with a reference thermometer under controlled, documented conditions. |
+| GSR | Electrode contact, baseline variation, ADC configuration, and the module’s conversion method. |
 
-```bash
-cd backend
-pip install -r requirements.txt
-python app.py
-```
+### End-to-end acceptance checks
 
-**3. Start the frontend**
+| Check | Expected result |
+| --- | --- |
+| Measurement origin | Every live value originates from connected hardware. |
+| Sensor removal | The affected measurement becomes explicitly unavailable. |
+| Network loss | The interface shows disconnected or stale status. |
+| Invalid payload | The backend returns a clear validation error. |
+| Pipeline trace | A known hardware reading can be followed through ingestion to display. |
+| Historical retrieval | Stored values and timestamps remain consistent, where supported. |
 
-```bash
-cd frontend
-npm install
-npm run dev
-```
+These are acceptance criteria, not a report of completed tests. The supplied material provides no measured accuracy, latency, battery-life, uptime, or load-test results.
 
-**4. Power on the wearable** and confirm it connects to Wi-Fi and begins transmitting to the backend endpoint.
+Signal quality depends on sensor placement, contact, calibration, movement, and environmental conditions. Network availability also affects live visibility. Sanjeevni is intended for engineering evaluation and wellness exploration, not diagnosis, treatment, or emergency monitoring.
 
----
+## Roadmap
 
-## 📡 API Overview
+The source documentation identifies these future directions; they are not presented as completed capabilities:
 
-A representative (illustrative) set of backend endpoints:
+| Development area | Planned direction |
+| --- | --- |
+| Sensing | Additional physiological inputs, including ECG and respiration. |
+| Edge processing | Expanded on-device filtering and signal processing. |
+| Data platform | Cloud-based long-term storage and analytics. |
+| User experience | Mobile companion application. |
+| Notifications | Alerts for anomalous readings. |
+| Power | Battery-life and power-management improvements. |
 
-| Method | Endpoint                | Description                                |
-| ------ | ------------------------ | ------------------------------------------- |
-| POST   | `/api/sensor-data`       | Receive a sensor payload from the ESP32     |
-| GET    | `/api/sensor-data/latest`| Fetch the most recent reading(s)            |
-| GET    | `/api/sensor-data/history`| Fetch historical readings                  |
-| GET    | `/api/device/status`     | Get device/connection status                |
-| WS     | `/ws/live`                | Real-time streaming channel (if implemented)|
+## Contributing
 
-> See [`backend/README.md`](backend/README.md) for the authoritative, up-to-date API reference.
+Create a focused feature branch and keep changes within the relevant firmware, backend, frontend, or documentation layer. Explain the problem, the resulting behavior, and how the change was validated in the pull request.
 
----
+Sensor-related changes should include real-hardware validation where possible. Record the board and sensor configuration, calibration conditions, and any known limitations. Keep setup instructions and API documentation aligned with implementation changes, and preserve the data-integrity requirements above.
 
-## 🎛 Sensor Calibration
+## License
 
-Each sensor may require calibration or tuning before readings are reliable:
-
-* **MAX30102** — finger/wrist placement, ambient light shielding, and algorithm tuning affect HR/SpO₂ accuracy.
-* **MPU6050** — accelerometer/gyroscope offsets should be calibrated at rest to remove bias.
-* **MAX30205** — verify against a reference thermometer under controlled conditions.
-* **GSR** — baseline skin conductance varies by person and electrode placement; a per-user baseline is recommended.
-
-Calibration routines and reference values should be documented under `docs/hardware/`.
-
----
-
-## 🛠 Error Handling
-
-Sanjeevni handles errors explicitly rather than masking them with fabricated data:
-
-* **Sensor-level:** failed reads are flagged and reported, not replaced with defaults.
-* **Firmware-level:** connection loss triggers retry logic and status reporting rather than silent failure.
-* **Backend-level:** malformed or out-of-range payloads are rejected with clear validation errors.
-* **Frontend-level:** missing or stale data is shown as "no data" / "disconnected," never as a plausible-looking fake value.
-
----
-
-## 🔁 Development Workflow
-
-1. Create a feature branch from `main`.
-2. Make changes within the relevant layer (`firmware/`, `backend/`, `frontend/`, `docs/`).
-3. Test against real hardware/sensor data wherever possible.
-4. Update relevant documentation (this README and layer-specific READMEs).
-5. Open a pull request describing the change and how it was validated.
-
----
-
-## 🚀 Future Scope
-
-* Additional physiological sensors (e.g., ECG, respiration)
-* On-device signal processing and filtering
-* Cloud-based long-term storage and analytics
-* Mobile companion app
-* Alerting/notification system for anomalous readings
-* Battery and power-optimization improvements
-
----
-
-## ⚠️ Limitations
-
-* Derived physiological values (HR, SpO₂, etc.) depend heavily on sensor placement, contact quality, and environmental conditions.
-* The system is a research/engineering platform, not a certified medical device.
-* Real-time performance depends on network conditions between the wearable and backend.
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome. Please:
-
-1. Fork the repository.
-2. Create a descriptive feature branch.
-3. Follow the existing code style for each layer.
-4. Ensure any sensor-related change is tested against real hardware.
-5. Submit a pull request with a clear description of the change.
-
----
-
-## 📄 License
-
-This project is licensed under the terms specified in the [LICENSE](LICENSE) file.
-
----
-
-## ⚕️ Disclaimer
-
-Sanjeevni is an educational/engineering project and is **not a certified medical device**. Readings produced by this system should not be used for medical diagnosis, treatment decisions, or emergency response. Always consult a qualified healthcare professional for medical concerns.
+Confirm the license in the repository’s `LICENSE` file before using or redistributing the project. A specific license is not established in the supplied documentation.
